@@ -1,0 +1,11 @@
+impressions.df <- read.csv("impressions.csv")
+
+datalist = list(#note agent doesn't see attributes, only 'impressions' of them. Agents differ in their calc_sd etc. setup parameters, these are passed.
+    N=hm_trials,
+    K=3,##three options assumed.
+    calc_obs=calc_observations,
+    ord_observations_prob= ord_prob,
+    ord_observations_payoff=ord_payoff
+)
+
+fit <- stan(

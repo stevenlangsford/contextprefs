@@ -1,0 +1,91 @@
+#This file sets up sim trials, attaches the agent's (noisy) observations following howes16, and writes the results to impressions.csv
+#A simulated agent should then read in the observations (not the true trial attributes) and make a choice for each.
+
+library(dplyr)
+library(ggplot2)
+rm(list=ls())
+####################################################################################################
+set.seed(4);
+####################################################################################################
+
+##agent params. Assuming "abs(normal) + constant" for now. These are placeholders.
+pop_calcsd_mean = 3;
+pop_calcsd_sd = 1;
+
+pop_tolerance_prob_mean = .011;
+pop_tolerance_prob_sd = .01;
+
+pop_tolerance_payoff_mean = 1.1;
+pop_tolerance_payoff_sd = 1;
+
+pop_p_err_mean = .01;
+pop_p_err_sd = .01;
+
+
+##exp params
+hm_ppnts = 3;
+hm_trials = 10;#trials per participant.
+
+
+##setup sim data. Probably not going to be the final version of these distributions! Worth re-thinking.
+##setup agents
+ppnt_calcsd = abs(rnorm(hm_ppnts,pop_calcsd_mean,pop_calcsd_sd))+.5
+ppnt_tolerance_prob = abs(rnorm(hm_ppnts,pop_tolerance_prob_mean,pop_tolerance_prob_sd))+.01
+ppnt_tolerance_payoff = abs(rnorm(hm_ppnts,pop_tolerance_payoff_mean,pop_tolerance_payoff_sd))+1
+ppnt_p_err = abs(rnorm(hm_ppnts,pop_p_err_mean,pop_p_err_sd))
+##setup trials:
+#single set of hm_trials stimuli implies that all participants see the same stimuli. Not necessarily true?
+prob <- matrix(rbeta(hm_trials*3,1,1),ncol=3,nrow=hm_trials)
+payoff <- matrix(rnorm(hm_trials*3,100,5),ncol=3,nrow=hm_trials)
+
+##helper functions translating trial properties into (ord) observations
+obs_error <- function(p_err){#true if an error occured
+    rbinom(1,1,p_err)==1;
+}
+
+obs_status <- function(target,i,j,k,tolerance){#returns a true relation (between attributes j and k in row i of target)
+    ##using 1, 2, 3 to stand in for <, =, >
+    if(abs(target[i,j]-target[i,k])<tolerance) {
+        return(2);
+    }else{
+        if(target[i,j]<target[i,k]){
+            return(1);
+        } else{
+            return(3);
+        }
+    }
+}
+obs_errorvalue <- function(){#error relations are uniform at random
+    base::sample(c(1,2,3),1)
+}
+
+
+##setup impressions:
+impressions.df <- data.frame(ppntID=c(),trial=c(),probA=c(),probB=c(),probC=c(),payoffA=c(),payoffB=c(),payoffC=c(),calcA=c(),calcB=c(),calcC=c(),probAB=c(),probAC=c(),probBC=c(),payoffAB=c(),payoffAC=c(),payoffBC=c())
+
+impression.row = 1;
+for(i in 1:hm_ppnts){
+    for(j in 1:hm_trials){
+        impressions.df[impression.row,"ppntID"]=i;
+        impressions.df[impression.row,"trial"]=j;        
+        impressions.df[impression.row,"probA"]=prob[j,1]
+        impressions.df[impression.row,"probB"]=prob[j,2]
+        impressions.df[impression.row,"probC"]=prob[j,3]
+        impressions.df[impression.row,"payoffA"]=payoff[j,1]
+        impressions.df[impression.row,"payoffB"]=payoff[j,2]
+        impressions.df[impression.row,"payoffC"]=payoff[j,3]
+        impressions.df[impression.row,"calcA"]=rnorm(1,prob[j,1]*payoff[j,1],ppnt_calcsd[i]);
+        impressions.df[impression.row,"calcB"]=rnorm(1,prob[j,2]*payoff[j,2],ppnt_calcsd[i]);
+        impressions.df[impression.row,"calcC"]=rnorm(1,prob[j,3]*payoff[j,3],ppnt_calcsd[i]);
+        impressions.df[impression.row,"probAB"]=ifelse(obs_error(ppnt_p_err[i]), obs_errorvalue(), obs_status(prob,j,1,2,ppnt_tolerance_prob[i]))
+        impressions.df[impression.row,"probAC"]=ifelse(obs_error(ppnt_p_err[i]), obs_errorvalue(), obs_status(prob,j,1,3,ppnt_tolerance_prob[i]))
+        impressions.df[impression.row,"probBC"]=ifelse(obs_error(ppnt_p_err[i]), obs_errorvalue(), obs_status(prob,j,2,3,ppnt_tolerance_prob[i]))
+        impressions.df[impression.row,"payoffAB"]=ifelse(obs_error(ppnt_p_err[i]), obs_errorvalue(), obs_status(payoff,j,1,2,ppnt_tolerance_payoff[i]))
+        impressions.df[impression.row,"payoffAC"]=ifelse(obs_error(ppnt_p_err[i]), obs_errorvalue(), obs_status(payoff,j,1,3,ppnt_tolerance_payoff[i]))
+        impressions.df[impression.row,"payoffBC"]=ifelse(obs_error(ppnt_p_err[i]), obs_errorvalue(), obs_status(payoff,j,2,3,ppnt_tolerance_payoff[i]))
+        impression.row <- impression.row+1;
+    }
+}
+
+#save impressions.df, so a model agent can read in the observation data, ignoring the true stim attributes, and attach a choice to each stimulus.
+write.csv(impressions.df,file="impressions.csv")
