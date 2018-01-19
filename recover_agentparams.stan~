@@ -1,0 +1,105 @@
+functions{
+  simplex get_ordtheta(real a, real b, real tolerance){
+    real p_err; 
+    real difference;
+    simplex[3] theta;
+    p_err=.01;
+    difference = a-b;
+     
+    if(fabs(difference)<tolerance){
+        theta[1]=p_err/3;
+        theta[2]=1-p_err+p_err/3;
+        theta[3]=p_err/3;
+    }else if(difference < 0){
+        theta[1]=1-p_err+p_err/3;
+        theta[2]=p_err/3;
+        theta[3]=p_err/3;
+    }else{
+        theta[1]=p_err/3;
+        theta[2]=p_err/3;
+        theta[3]=1-p_err+p_err/3;
+    }
+    return theta;
+  }
+}
+
+data{
+  int<lower=0> N;//total observations
+  int<lower=0> hm_ppnts;
+  int ppntid[N]; //used as index, must range in 1:hm_ppnts
+  int choice[N];
+  vector[3] true_prob[N]; //these are used to generate the calc and ord observations, but NOT in priors for prob and payoff, the agent's perception of these things.
+  vector[3] true_payoff[N];
+}
+
+parameters{
+  //here prob and payoff are agent's inferred prob and payoff, not the true stim ones.
+  vector<lower=0,upper=1>[3] prob[N];
+  vector[3] payoff[N];
+
+  vector[3] beta_prob[hm_ppnts]; //coeffs for multinomial regression behind ord observations. Per participant because tolerance may vary.
+  vector[3] beta_payoff[hm_ppnts]; //one for each attribute because priors here set scale-specific tolerance levels.
+
+  //observed in agent's-eye-view, now unobserved in exp-view.
+  real<lower=0> calc_sd[hm_ppnts];
+  real<lower=0> betawidth_prob[hm_ppnts];
+  real<lower=0> betawidth_payoff[hm_ppnts];
+  
+  vector[3] calc_observations[N];
+  simplex[3] ord_observations_prob[N]; 
+  simplex[3] ord_observations_payoff[N];
+  
+}
+
+model{
+  for(ppnt in 1:hm_ppnts){
+    betawidth_prob[ppnt]~normal(5,2.5); //complete guesses, but these are consequential. They should encode the expected tolerance levels and size of ordobs impact.
+    betawidth_payoff[ppnt]~normal(50,25);
+    calc_sd[ppnt]~student_t(3,1,1.5)+1; //just slightly fatter tails than normal.
+    
+    for(k in 1:3){
+      beta_prob[ppnt,k]~normal(0,betawidth_prob[ppnt]); //Encodes tolerance. Maybe try to normalize to get around scale differences for different attributes?
+      beta_payoff[ppnt,k]~normal(0,betawidth_payoff[ppnt]);
+    }
+  }//end ppnt setup
+  
+  for(trial in 1:N){
+    for(option in 1:3){
+      //priors on prob and payoff informed by true prob and payoff: exp-view only, agents really aren't allowed to do this.
+      //beta(α,β)  in terms of mean μ and sample size ν. Fixing ν for vague-ish confidence? 
+      /* α = μν, β = (1 − μ)ν  */
+      prob[trial,option]~beta(true_prob[trial,option]*4,(1-true_prob[trial,option])*4);
+      payoff[trial,option]~normal(true_payoff[trial,option],15); //experimenter entertains a wide range of possible perceived payoffs. (but assumes U() is identity)
+
+      
+      calc_observations[trial,option]~normal(prob[trial,option]*payoff[trial,option],calc_sd[ppntid[trial]]);//eq4 without alpha or U().
+    }//end for each option
+
+    //ord observation: coded as the vector you'd feed to the categorical distribution if you were going to draw a categorical relation, but don't do the draw.
+    ord_observations_prob[trial,1] ~ softmax(beta_prob[ppntid[trial]]*(prob[trial,1]-prob[trial,2]));
+    ord_observations_prob[trial,2] ~ softmax(beta_prob[ppntid[trial]]*(prob[trial,1]-prob[trial,3]));
+    ord_observations_prob[trial,3] ~ softmax(beta_prob[ppntid[trial]]*(prob[trial,2]-prob[trial,3]));
+
+    ord_observations_payoff[trial,1] ~ softmax(beta_payoff[ppntid[trial]]*(payoff[trial,1]-payoff[trial,2]));
+    ord_observations_payoff[trial,2] ~ softmax(beta_payoff[ppntid[trial]]*(payoff[trial,1]-payoff[trial,3]));
+    ord_observations_payoff[trial,3] ~ softmax(beta_payoff[ppntid[trial]]*(payoff[trial,2]-payoff[trial,3]));
+
+    //TODO GOTTA OBSERVE THE CHOICES SOMEHOW. just checking if this runs at all first...
+  }//end for trial i  
+}//end model block
+
+generated quantities{
+  vector[3] estValue[N];
+  int choice[N];
+  
+  for(i in 1:N){
+    for(j in 1:3){
+    estValue[i,j] = prob[i,j]*payoff[i,j];
+    }
+    //ignores the possibility of a tie
+    if(estValue[i,1]>estValue[i,2]&&estValue[i,1]>estValue[i,3])choice[i]=1;
+    if(estValue[i,2]>estValue[i,1]&&estValue[i,2]>estValue[i,3])choice[i]=2;
+    if(estValue[i,3]>estValue[i,1]&&estValue[i,3]>estValue[i,2])choice[i]=3;
+  }
+  
+}

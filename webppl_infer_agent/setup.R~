@@ -1,0 +1,26 @@
+rm(list=ls())
+library(ggplot2)
+library(dplyr)
+library(rwebppl)
+
+exp.df <- read.csv("simexp.csv")
+exp.df$ppntid <- exp.df$ppntid-1; #webppl is 0 indexed.
+
+exp.df$expectA = exp.df$probA*exp.df$payoffA
+exp.df$expectB = exp.df$probB*exp.df$payoffB
+exp.df$expectC = exp.df$probC*exp.df$payoffC
+
+                                        #data frames arrive in webppl as an array of objects, each object is a row, with attributes colnames holding the values in that row.
+timer <- system.time(
+fit  <- webppl(program_file="model.ppl",data=exp.df,data_var="expdf")
+)
+
+print(fit)
+print(timer)
+
+##single run on 40 trials, agent= Infer({method:"MCMC",samples:1500,lag:0,burn:250,model:agentMaker(i)})
+  ##  user  system elapsed 
+  ## 0.008   0.000   7.516 
+
+   ##  user   system  elapsed 
+   ## 0.746    0.438 6509.473 

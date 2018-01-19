@@ -59,7 +59,7 @@ mystim <- getStim_twomatrixformat(hm_trials)
 prob <- mystim[[1]]
 payoff <- mystim[[2]]
 
-impressions.df <- data.frame(ppntid=c(),trialid=c(),probA=c(),probB=c(),probC=c(),payoffA=c(),payoffB=c(),payoffC=c(),calcA=c(),calcB=c(),calcC=c(),ordprobAB=c(),ordprobAC=c(),ordprobBC=c(),ordpayoffAB=c(),ordpayoffAC=c(),ordpayoffBC=c()); #via df rather than directly to datalist because this is what you'll want to inspect it.
+impressions.df <- data.frame(ppntid=c(),trialid=c(),probA=c(),probB=c(),probC=c(),payoffA=c(),payoffB=c(),payoffC=c(),calcA=c(),calcB=c(),calcC=c(),ordprobAB=c(),ordprobAC=c(),ordprobBC=c(),ordpayoffAB=c(),ordpayoffAC=c(),ordpayoffBC=c()); #via df rather than directly to datalist for convenient inspection.
 
 impressionrow <- 1;
 for(ppnt in 1:hm_ppnts){
@@ -108,12 +108,22 @@ timer_full <- system.time(
 )
 
 estvals <- apply(extract(fit,"estValue")$estValue,c(2,3),mean)
+estvalsd <- apply(extract(fit,"estValue")$estValue,c(2,3),sd) #estval distributions are usually pretty normal-looking, but right-skewed when hitting floor of 0.
 dimnames(estvals)=list(NULL,c("estA","estB","estC"))
+dimnames(estvalsd)=list(NULL,c("estAsd","estBsd","estCsd"))
+
 impressions.df <- cbind(impressions.df,as.data.frame(estvals))
-##attach mean & sd estValue to impressions.df
+impressions.df <- cbind(impressions.df,as.data.frame(estvalsd))
 
-with(impressions.df,plot(calcA,estA))
+for(i in 1:nrow(impressions.df)){
+impressions.df[i,"choice"]=which(impressions.df[i,c("estA","estB","estC")]==max(impressions.df[i,c("estA","estB","estC")])) #ignores chance of tie. Left as numbers rather than converting to ABC because these are about to be fed back into Stan.
+}
 
+#by all means record impressions.df somwhere, but this is what you're allowed to observe.
+simexp.df <- impressions.df[,c("ppntid","trialid","probA","probB","probC","payoffA","payoffB","payoffC","choice")]
+
+write.csv(simexp.df,file="simexp.csv",row.names=FALSE)
+write.csv(impressions.df,file="impressions.csv",row.names=FALSE)
 ##print(prob);
 ##print(payoff);
 ##launch_shinystan(fit_sans);
