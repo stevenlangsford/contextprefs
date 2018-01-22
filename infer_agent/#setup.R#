@@ -1,0 +1,85 @@
+rm(list=ls())
+library(ggplot2)
+library(dplyr)
+library(rwebppl)
+
+##source("mailstuff.R")
+
+exp.df <- read.csv("simexp.csv")
+#exp.df$ppntid <- exp.df$ppntid-1; #webppl is 0 indexed.
+
+exp.df$expectA = exp.df$probA*exp.df$payoffA
+exp.df$expectB = exp.df$probB*exp.df$payoffB
+exp.df$expectC = exp.df$probC*exp.df$payoffC
+
+##data frames arrive in webppl as an array of objects, each object is a row, with attributes colnames holding the values in that row.
+
+timer <- system.time(
+    fit  <- webppl(program_file="model.ppl",data=exp.df,data_var="expdf")
+)
+
+##Organize the return values for inspection. Be careful identifying things by their index in an array
+ppnt.params.df <- data.frame(
+    ppnt_calcsd=c(),
+    ppnt_tolerance_prob=c(),
+    ppnt_tolerance_payoff=c(),
+    ppnt_orderror=c()
+)
+
+pop.params.df <- data.frame(
+    pop_calcsd_mean=c(),
+    pop_calcsd_sd=c(),
+    pop_tolerance_prob_mean=c(),
+    pop_tolerance_prob_sd=c(),
+    pop_tolerance_payoff_mean=c(),
+    pop_tolerance_payoff_sd=c(),
+    pop_orderror_mean=c(),
+    pop_orderror_sd=c()
+)
+
+for(asample in fit$value){
+    pop.row <- data.frame(
+        pop_calcsd_mean=asample[[1]],
+        pop_calcsd_sd=asample[[2]],
+        pop_tolerance_prob_mean=asample[[3]],
+        pop_tolerance_prob_sd=asample[[4]],
+        pop_tolerance_payoff_mean=asample[[5]],
+        pop_tolerance_payoff_sd=asample[[6]],
+        pop_orderror_mean=asample[[7]],
+        pop_orderror_sd=asample[[8]]
+    )
+    
+    pop.params.df <- rbind(pop.params.df,pop.row)
+
+    ppnt.row <- data.frame(ppntid=0:max(exp.df$ppntid),
+                           ppnt_calcsd=asample[[9]],
+                           ppnt_tolerance_prob=asample[[10]],
+                           ppnt_tolerance_payoff=asample[[11]],
+                           ppnt_orderror=asample[[12]]
+                           )
+    ppnt.params.df <- rbind(ppnt.params.df,ppnt.row)
+}
+
+##Final result: pop.params.df & ppnt.params.df
+##Each contains samples for each value from the posterior, number of samples s set in 'model'.
+##pop.params will have s rows, ppnt.params will have s*hm_ppnts rows, with no distinguishing features for samples from the same participant, all rows with a shared participant number go together to approximate a posterior.
+
+##inspect:
+recovered.df <- ppnt.params.df%>%group_by(ppntid)%>%
+    summarize(calcsd=mean(ppnt_calcsd), #means might not be the best way to summarize the posterior! Remember to also inspect the full distributions.
+              tolerance_prob=mean(ppnt_tolerance_prob),
+              tolerance_payoff=mean(ppnt_tolerance_payoff),
+              orderror=mean(ppnt_orderror)
+              )%>%
+    ungroup()
+original.df <- exp.df%>%group_by(ppntid)%>%summarize(
+                                               calcsd=mean(calc_sd),#actually these values are all identical in exp.df, they're a fixed sim truth. Whatever.
+                                               tolerance_prob=mean(tolerance_prob),
+                                               tolerance_payoff=mean(tolerance_payoff),
+                                               orderror=mean(p_err) #when are you going to start keeping names consistent?
+                                           )%>%
+    ungroup()
+
+names(original.df) <- paste0(names(original.df),"_simtruth")
+
+compare.df <- cbind(recovered.df,original.df[,-1])#-1 drops ppntid, don't need that twice in one row.
