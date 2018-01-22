@@ -1,0 +1,9 @@
+
+showme <- function(){
+    for(avar in names(recovered.df[,-1])){ #-1 cuts ppntid, that's always recovered perfectly.
+        x11();
+        eval(parse(text=
+                       paste0("plot(original.df$",avar,"_simtruth,recovered.df$",avar,")")
+                   ));
+    }
+}

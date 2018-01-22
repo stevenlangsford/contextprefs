@@ -1,23 +1,26 @@
-rm(list=ls())
 library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(rwebppl)
 
 
-set.seed(4) #chosen by fair dice roll.
+write_simexp <- function(hm_ppnts,hm_trials,stimtype="random",savepath="../",runpath,saveplots=FALSE){
 
-hm_ppnts = 10;
-hm_trials = 30; #per participant, not total.
-
-##agent params: should be saved with simexp.df? Maybe that should be RData with simexp.df and these, not a csv?
+ ##population params: fixed for now, but the values here will definitely also impact parameter recovery and need exploring?
 calc_sd = abs(rnorm(hm_ppnts,3,.5))
 tolerance_prob = rbeta(hm_ppnts,1,20)+.01
 tolerance_payoff = abs(rnorm(hm_ppnts,1,1))+1
 p_err = rep(.01,hm_ppnts);
 
-source("wedellExp1Stim.R")
-mystim <- getStim_twomatrixformat(hm_trials,getRandomtrial)
+source(paste0(runpath,"wedellExp1Stim.R"))
+    if(stimtype=="random"){
+        mystim <- getStim_twomatrixformat(hm_trials,getRandomtrial)
+    }else if(stimtype=="wedellish"){
+        mystim <- getStim_twomatrixformat(hm_trials,getWedelltrial)
+    }else{
+        stop(paste("Did not recognize stimtype ",stimtype))
+    }
+    
 prob <- mystim[[1]]
 payoff <- mystim[[2]]
 
@@ -46,13 +49,13 @@ for(ppnt in 1:hm_ppnts){
 ##add simulated choices
      timer <- system.time(
          #simexp.df$choice
-         agentstuff <- webppl(program_file="choicemaker.ppl",data=simexp.df,data_var="expdf")
+         agentstuff <- webppl(program_file=paste0(runpath,"choicemaker.ppl"),data=simexp.df,data_var="expdf")
      )
 ##you could just add the choices (agentstuff[[8]]), 
 simexp.df$choice <- agentstuff[[8]] ##DONE
 
 ##all the other stuff is just here to inspect the model's working-out.
-saveplots <- TRUE; plot.dir="./rnd_stim_plots/";
+plot.dir=paste0(savepath,"plots/")
 
 calcobs <- agentstuff[[1]]
 simexp.df$calcA <- calcobs[,1]
@@ -78,7 +81,7 @@ calcvstruth.plot <- ggplot(simexp.df,aes(x=exValA,y=calcA))+geom_point()+
     xlab("Option A value in expectation")+
     ylab("Agent's calc observation")+
     theme_bw()
-if(saveplots)ggsave(calcvstruth.plot,file=paste0(plot.dir,"calcvstruth.png"));
+if(saveplots)ggsave(calcvstruth.plot,file=paste0(plot.dir,paste0("calcvstruth",hm_ppnts,"ppnts",hm_trials,"trials",stimtype,"stim",".png")));
 
 ##check the ord observation looks like you'd expect:
 check_ordobs <- function(a,b,tolerance,ordobs){
@@ -118,10 +121,10 @@ errate_plotable.df <- gather(ordobs_errorrate_check.df,comparison,err.rate)
 ord_error.plot <- ggplot(errate_plotable.df,aes(x=comparison,group=comparison,y=err.rate))+
     geom_bar(stat="identity")+
     coord_cartesian(ylim=c(.95,1))+
-    geom_hline(aes(yintercept = 1-mean(p_err)+(1/3)*mean(p_err),color="expected"),width=2)+
+    geom_hline(aes(yintercept = 1-mean(p_err)+(1/3)*mean(p_err),color="expected"))+
     xlab("Comparison")+
     ylab("Proportion correct")
-if(saveplots)ggsave(ord_error.plot,file=paste0(plot.dir,"ordrelation_errors.png"));
+if(saveplots)ggsave(ord_error.plot,file=paste0(plot.dir,paste0("ordrelation_errors",hm_ppnts,"ppnts",hm_trials,"trials",stimtype,"stim",".png")));
 
 ##expected value of chosen option
 for(i in 1:nrow(simexp.df)){
@@ -137,7 +140,8 @@ performance.plot <- ggplot(simexp.df)+geom_density(aes(x=randomChoice_loss,color
     geom_density(aes(x=agent_loss,color="agent"))+
     xlab("Chosen - best_available (in expectation)")+
      theme_bw()
-if(saveplots)ggsave(performance.plot,file=paste0(plot.dir,"agentvsguesser.png"));
+if(saveplots)ggsave(performance.plot,file=paste0(plot.dir,paste0("agentvsguesser",hm_ppnts,"ppnts",hm_trials,"trials",stimtype,"stim",".png")));
 
-##Todo, see if this shows context effects?
-write.csv(simexp.df,file="simexp.csv",row.names=FALSE)
+
+write.csv(simexp.df,file=paste0(savepath,"simexp",hm_ppnts,"ppnts",hm_trials,"trials",stimtype,"stim",".csv"),row.names=FALSE)
+}

@@ -1,13 +1,16 @@
-rm(list=ls())
 library(ggplot2)
 library(dplyr)
+library(tidyr)
 library(rwebppl)
 
 ##source("mailstuff.R")
 
-exp.df <- read.csv("simexp.csv")
-#exp.df$ppntid <- exp.df$ppntid-1; #webppl is 0 indexed.
-
+write_agent_recovery<- function(simexpfolder,simexpcsvname,modelpath,outputpath){ #simexp folder and filename split so you can re-use the filename in saved output.
+    
+    simdetails <- substr(simexpcsvname,1,nchar(simexpcsvname)-4) #strips '.csv', which leaves just the hm_ppnts hm_trials stimtype tag. put this on any output.
+    
+    exp.df <- read.csv(paste0(simexpfolder,simexpcsvname))
+    
 exp.df$expectA = exp.df$probA*exp.df$payoffA
 exp.df$expectB = exp.df$probB*exp.df$payoffB
 exp.df$expectC = exp.df$probC*exp.df$payoffC
@@ -15,10 +18,10 @@ exp.df$expectC = exp.df$probC*exp.df$payoffC
 ##data frames arrive in webppl as an array of objects, each object is a row, with attributes colnames holding the values in that row.
 
 timer <- system.time(
-    fit  <- webppl(program_file="model.ppl",data=exp.df,data_var="expdf")
+    fit  <- webppl(program_file=paste0(modelpath,"model.ppl"),data=exp.df,data_var="expdf")
 )
 
-##Organize the return values for inspection. Be careful identifying things by their index in an array!
+##Organize the return values for inspection. Be careful identifying things by their index in an array, seems dangerous. :-(
 ppnt.params.df <- data.frame(
     ppnt_calcsd=c(),
     ppnt_tolerance_prob=c(),
@@ -61,7 +64,7 @@ for(asample in fit$value){
 }
 
 ##Final result: pop.params.df & ppnt.params.df
-##Each contains samples for each value from the posterior, number of samples s set in 'model'.
+##Each contains samples for each value from the posterior, number-of-samples s set in 'model'.
 ##pop.params will have s rows, ppnt.params will have s*hm_ppnts rows, with no distinguishing features for samples from the same participant, all rows with a shared participant number go together to approximate a posterior.
 
 ##inspect:
@@ -82,4 +85,6 @@ original.df <- exp.df%>%group_by(ppntid)%>%summarize(
 
 names(original.df) <- paste0(names(original.df),"_simtruth")
 
-compare.df <- cbind(recovered.df,original.df[,-1])#-1 drops ppntid, don't need that twice in one row.
+    compare.df <- cbind(recovered.df,original.df[,-1])#-1 drops ppntid, don't need that twice in one row.
+    write.csv(compare.df,file=paste0(outputpath,"/",simdetails,"_recovery.csv"),row.names=FALSE);
+}

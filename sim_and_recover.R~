@@ -1,0 +1,3 @@
+rm(list=ls())
+source("create_sim/setup.R")
+write_simexp(hm_ppnts=2,hm_trials=2,stimtype="random",savepath="./simdata_store",runpath="create_sim/",saveplots=FALSE)

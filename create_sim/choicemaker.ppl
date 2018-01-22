@@ -94,7 +94,7 @@ var agentMaker = function(i){
 
 
 var choices =  map(function(i){
-    console.log("trial "+(i+1)+" of "+probA.length); //runs faster without this, when you don't need reassuring anymore take it out.
+//    console.log("trial "+(i+1)+" of "+probA.length); //runs faster without this, when you don't need reassuring anymore take it out.
     var agent = Infer({method:"MCMC",samples:100,lag:0,burn:10,model:agentMaker(i)});
     var trialprobs = [Math.exp(agent.score(1)),Math.exp(agent.score(2)),Math.exp(agent.score(3))];
     return categorical({vs:[1,2,3],ps:Vector(trialprobs).add(Vector([.01,.01,.01]))})//Categorical will normalize as needed. Fudge-factor.01 interpretable as 'finger-slipped' probability. If it's not there in the agent-inference version, occasionally agent will give a negligable prob to the actual choice, and model() will die in a pool of NaN tears. Not so critical here where agent's word is law, but kept for consistency between generation and recovery versions.
