@@ -1,0 +1,108 @@
+//Gives a list of simulated participant choices to add to a simulated exp.df
+//each row of the passed df should give stim properties and agent setup params for that choice.
+
+//helper functions
+//finds hm_ppnts from ppntid, **assumed to be consecutive ints starting at 0**
+var max = function(arr){reduce(function(a,b){if(a>b)return a; else return b;},arr[0],arr)};
+
+//alternative to looping over rows, use map over a countlist(arr.length) index
+var countlist = function(n){
+    var countdown = function(n){//So ugly! But if you're gonna use this as an index, it makes more sense/keeps correct correspondances in count-up order.
+	if(n<=0) return [];
+	return [n-1].concat(countdown(n-1));
+    }
+    countdown(n).reverse()
+}
+//get the data.df in more convenient lists:
+var ppntid = map(function(arow){arow["ppntid"]},expdf)
+var probA = map(function(arow){arow["probA"]},expdf)
+var probB = map(function(arow){arow["probB"]},expdf)
+var probC = map(function(arow){arow["probC"]},expdf)
+var payoffA = map(function(arow){arow["payoffA"]},expdf)
+var payoffB = map(function(arow){arow["payoffB"]},expdf)
+var payoffC = map(function(arow){arow["payoffC"]},expdf)
+//extra agent param setting for choice creation:
+var ppnt_calcsd = map(function(arow){arow["calc_sd"]},expdf)
+var ppnt_tolerance_prob  = map(function(arow){arow["tolerance_prob"]},expdf)
+var ppnt_tolerance_payoff = map(function(arow){arow["tolerance_payoff"]},expdf)
+var ppnt_orderror = map(function(arow){arow["p_err"]},expdf)
+
+var hm_ppnts = max(map(function(arow){arow["ppntid"]},expdf))+1;//+1 because id's start from 0. Basically countlist(hm_ppnts) must give indexes into an array that is hm_ppnts long. Starting from 0 in exp.df and adding one here does this. https://xkcd.com/163/
+var hm_trials = expdf.length;
+
+var trial_calcobs = map(function(i){
+    var calcobs_arr =
+	[probA[i]*payoffA[i]+gaussian({mu:0,sigma:ppnt_calcsd[i]}),
+	 probB[i]*payoffB[i]+gaussian({mu:0,sigma:ppnt_calcsd[i]}),
+	 probC[i]*payoffC[i]+gaussian({mu:0,sigma:ppnt_calcsd[i]})
+	];
+    return calcobs_arr;
+},countlist(hm_trials))
+
+//ordinal observations for individual rows i
+var ordrelation = function(a,b,tolerance,orderr){//these args are individual values...
+    if(flip(orderr)) return categorical({vs:["<","=",">"],ps:[1,1,1]});
+    if(Math.abs(a-b)<tolerance) return "=";
+    if(a>b) return ">";
+    if(a<b) return "<";
+}
+//convenient helper to get ord observations for every trial
+var ordrelation_list = function(a,b,tolerance){//but these args are lists, entire cols of data.df.
+    //Is it interesting that orderr is shared across attribute modality here?
+    map(function(i){ordrelation(a[i],b[i],tolerance[i],ppnt_orderror[i])},
+	countlist(hm_trials))
+}
+//ord observations for each trial
+var ord_ABprob = ordrelation_list(probA,probB,ppnt_tolerance_prob);
+var ord_ACprob = ordrelation_list(probA,probC,ppnt_tolerance_prob);
+var ord_BCprob = ordrelation_list(probB,probC,ppnt_tolerance_prob);
+var ord_ABpayoff = ordrelation_list(payoffA,payoffB,ppnt_tolerance_payoff);
+var ord_ACpayoff = ordrelation_list(payoffA,payoffC,ppnt_tolerance_payoff);
+var ord_BCpayoff = ordrelation_list(payoffB,payoffC,ppnt_tolerance_payoff);
+
+var agentMaker = function(i){
+    return function(){
+	//priors on the distribution of attributes: these don't change with experience. I guess they could, for some cost in complexity.
+	var agent_probs = repeat(3,function(){sample(Beta({a:1,b:1}))});
+	var agent_payoffs = repeat(3,function(){sample(RandomInteger({n:40}))});//This prior is for the range of the Wedell stimuli. Howes16 would use something like function(){sample(Gaussian({mu:100,sigma:10}))} not sure how important the shape of this distribution is.
+	//agent is aware of the process that generated the observations, including own noise levels.  
+
+	//observe the calculation observations: calcobs is known to be prob*payoff+noise, calcobs is known, noise is known, prob and payoff are inferred.
+	observe(Gaussian({mu:agent_probs[0]*agent_payoffs[0],sigma:ppnt_calcsd[i]}),trial_calcobs[i][0])
+	observe(Gaussian({mu:agent_probs[1]*agent_payoffs[1],sigma:ppnt_calcsd[i]}),trial_calcobs[i][1])
+	observe(Gaussian({mu:agent_probs[2]*agent_payoffs[2],sigma:ppnt_calcsd[i]}),trial_calcobs[i][2])
+
+	//similarly, agent knows exactly how ordrelation works, needs its prob and payoffs to produce ord relations consistent with the observed ones.
+	//SWITCHED OFF FOR CALCONLY
+	// condition(ordrelation(agent_probs[0],agent_probs[1],ppnt_tolerance_prob[i])==ord_ABprob[i]);
+	// condition(ordrelation(agent_probs[0],agent_probs[2],ppnt_tolerance_prob[i])==ord_ACprob[i]);
+	// condition(ordrelation(agent_probs[1],agent_probs[2],ppnt_tolerance_prob[i])==ord_BCprob[i]);
+	// condition(ordrelation(agent_payoffs[0],agent_payoffs[1],ppnt_tolerance_payoff[i])==ord_ABpayoff[i]);
+	// condition(ordrelation(agent_payoffs[0],agent_payoffs[2],ppnt_tolerance_payoff[i])==ord_ACpayoff[i]);
+	// condition(ordrelation(agent_payoffs[1],agent_payoffs[2],ppnt_tolerance_payoff[i])==ord_BCpayoff[i]);
+
+	//return a choice
+	var estvalA = agent_probs[0]*agent_payoffs[0]
+	var estvalB = agent_probs[1]*agent_payoffs[1]
+	var estvalC = agent_probs[2]*agent_payoffs[2]
+
+	if(estvalA>estvalB&&estvalB>estvalC) return 1;
+	if(estvalB>estvalA&&estvalB>estvalC) return 2;
+	if(estvalC>estvalA&&estvalC>estvalB) return 3;
+	
+    }//end agent's model
+}//end agent-maker, which points the agent model at row i of exp.df data
+
+
+var choices =  map(function(i){
+//    console.log("trial "+(i+1)+" of "+probA.length); //runs faster without this, when you don't need reassuring anymore take it out.
+    var agent = Infer({method:"MCMC",samples:100,lag:0,burn:10,model:agentMaker(i)});
+    var trialprobs = [Math.exp(agent.score(1)),Math.exp(agent.score(2)),Math.exp(agent.score(3))];
+    return categorical({vs:[1,2,3],ps:Vector(trialprobs).add(Vector([.01,.01,.01]))})//Categorical will normalize as needed. Fudge-factor.01 interpretable as 'finger-slipped' probability. If it's not there in the agent-inference version, occasionally agent will give a negligable prob to the actual choice, and model() will die in a pool of NaN tears. Not so critical here where agent's word is law, but kept for consistency between generation and recovery versions.
+},countlist(hm_trials))
+
+
+
+// //return value. Impressions included for diag inspection.
+var ret =[trial_calcobs,ord_ABprob,ord_ACprob,ord_BCprob,ord_ABpayoff,ord_ACpayoff,ord_BCpayoff,choices];
+ret;

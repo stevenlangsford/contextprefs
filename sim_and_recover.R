@@ -4,7 +4,7 @@ source("infer_agent/setup.R")
 
 timeinfo.df <- data.frame(hm_ppnts=c(),hm_trials=c(),stimtype=c(),simtime=c(),recovertime=c())
 
-for(hm_ppnts in seq(from=20,to=80,by=20){
+for(hm_ppnts in seq(from=20,to=80,by=20)){
     for(hm_trials in seq(from=20,to=40,by=10)){
         for(stimtype in c("random","wedellish")){
             
