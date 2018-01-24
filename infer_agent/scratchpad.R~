@@ -1,4 +1,0 @@
-library(ggplot2)
-times <- read.csv("rowtimes.csv")
-
-ggplot(times,aes(x=rows,y=fittime))+geom_point()+theme_bw()
