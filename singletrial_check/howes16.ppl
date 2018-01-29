@@ -108,10 +108,10 @@ var agentMaker = function(i){
 
 
 var choicerule = function(i){
-    var agent = Infer({method:"MCMC",samples:10000,lag:0,burn:20,model:agentMaker(i)}); 
+    var agent = Infer({method:"MCMC",samples:15500,lag:0,burn:1000,model:agentMaker(i)}); 
 
     //alternative if agent returns array of expected values [p1*v1,p2*v2,p3*v3]
-    var utilityPosteriors = repeat(8000,function(){sample(agent)});
+    var utilityPosteriors = repeat(18000,function(){sample(agent)});
     //Take the highest average return
     var A = Math.sum(map(function(x){x[0]},utilityPosteriors))/utilityPosteriors.length;
     var B = Math.sum(map(function(x){x[1]},utilityPosteriors))/utilityPosteriors.length;
