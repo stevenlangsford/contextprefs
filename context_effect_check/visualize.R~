@@ -1,1 +1,0 @@
-ggplot(simexp.df)+geom_density(aes(x=agent_loss,color=agent_loss))+geom_density(aes(x=randomChoice_loss,color=randomChoice_loss))

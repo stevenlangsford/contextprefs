@@ -27,6 +27,9 @@ var ppnt_tolerance_prob  = map(function(arow){arow["tolerance_prob"]},expdf)
 var ppnt_tolerance_payoff = map(function(arow){arow["tolerance_payoff"]},expdf)
 var ppnt_orderror = map(function(arow){arow["p_err"]},expdf)
 
+var useord = map(function(arow){arow["useord"]},expdf)
+var usecalc = map(function(arow){arow["usecalc"]},expdf)
+
 var hm_ppnts = max(map(function(arow){arow["ppntid"]},expdf))+1;//+1 because id's start from 0. Basically countlist(hm_ppnts) must give indexes into an array that is hm_ppnts long. Starting from 0 in exp.df and adding one here does this. https://xkcd.com/163/
 var hm_trials = expdf.length;
 
@@ -70,50 +73,61 @@ var agentMaker = function(i){
 	//agent is aware of the process that generated the observations, including own noise levels.  
 
 	//observe the calculation observations: calcobs is known to be prob*payoff+noise, calcobs is known, noise is known, prob and payoff are inferred.
+	if(usecalc[i]){
 	observe(Gaussian({mu:agent_probs[0]*agent_payoffs[0],sigma:ppnt_calcsd[i]}),trial_calcobs[i][0])
 	observe(Gaussian({mu:agent_probs[1]*agent_payoffs[1],sigma:ppnt_calcsd[i]}),trial_calcobs[i][1])
 	observe(Gaussian({mu:agent_probs[2]*agent_payoffs[2],sigma:ppnt_calcsd[i]}),trial_calcobs[i][2])
-
+	}
+	if(useord[i]){
 	//similarly, agent knows exactly how ordrelation works, needs its prob and payoffs to produce ord relations consistent with the observed ones.
-	condition(ordrelation(agent_probs[0],agent_probs[1],ppnt_tolerance_prob[i])==ord_ABprob[i]);
-	condition(ordrelation(agent_probs[0],agent_probs[2],ppnt_tolerance_prob[i])==ord_ACprob[i]);
-	condition(ordrelation(agent_probs[1],agent_probs[2],ppnt_tolerance_prob[i])==ord_BCprob[i]);
-	condition(ordrelation(agent_payoffs[0],agent_payoffs[1],ppnt_tolerance_payoff[i])==ord_ABpayoff[i]);
-	condition(ordrelation(agent_payoffs[0],agent_payoffs[2],ppnt_tolerance_payoff[i])==ord_ACpayoff[i]);
-	condition(ordrelation(agent_payoffs[1],agent_payoffs[2],ppnt_tolerance_payoff[i])==ord_BCpayoff[i]);
-
-	//return a choice
-	var estvalA = agent_probs[0]*agent_payoffs[0]
-	var estvalB = agent_probs[1]*agent_payoffs[1]
-	var estvalC = agent_probs[2]*agent_payoffs[2]
-
-	if(estvalA>estvalB&&estvalA>estvalC) return 1;
-	if(estvalB>estvalA&&estvalB>estvalC) return 2;
-	if(estvalC>estvalA&&estvalC>estvalB) return 3;
+	condition(ordrelation(agent_probs[0],agent_probs[1],ppnt_tolerance_prob[i],ppnt_orderror[i])==ord_ABprob[i]);
+	condition(ordrelation(agent_probs[0],agent_probs[2],ppnt_tolerance_prob[i],ppnt_orderror[i])==ord_ACprob[i]);
+	condition(ordrelation(agent_probs[1],agent_probs[2],ppnt_tolerance_prob[i],ppnt_orderror[i])==ord_BCprob[i]);
+	condition(ordrelation(agent_payoffs[0],agent_payoffs[1],ppnt_tolerance_payoff[i],ppnt_orderror[i])==ord_ABpayoff[i]);
+	condition(ordrelation(agent_payoffs[0],agent_payoffs[2],ppnt_tolerance_payoff[i],ppnt_orderror[i])==ord_ACpayoff[i]);
+	condition(ordrelation(agent_payoffs[1],agent_payoffs[2],ppnt_tolerance_payoff[i],ppnt_orderror[i])==ord_BCpayoff[i]);
+	}
 	
-	console.log("agent washout: "+estvalA+":"+estvalB+":"+estvalC); //better throw an error! But what is webppl's 'throw'?
-	agent_dies; //throws error agent_dies not defined if encountered: very bogan 'throw'.
+	//expected value of each option. (could just return this, [A,B,C], maybe advantages to that, but it involves another random 'sample' step to extract choices)
+	var A = agent_probs[0]*agent_payoffs[0];
+	var B = agent_probs[1]*agent_payoffs[1];
+	var C = agent_probs[2]*agent_payoffs[2];
+
+	var expectation = [A,B,C];
+	return expectation;
+	//choice-return option.
+	// if(A>B&&A>C)return 1;
+	// if(B>A&&B>C)return 2;
+	// if(C>A&&C>B)return 3;
+	// console.log("Agent washout");//should never happen?
     }//end agent's model
 }//end agent-maker, which points the agent model at row i of exp.df data
 
 
-var choices =  map(function(i){
-//    console.log("trial "+(i+1)+" of "+probA.length); //runs faster without this, when you don't need reassuring anymore take it out.
-    var agent = Infer({method:"MCMC",samples:499,lag:0,burn:100,model:agentMaker(i)}); //499 not divisible by 2 or 3, this prevents ties right? 
-    //Take the best:
-    var A = Math.exp(agent.score(1)); //exp converts to probability, which I guess is not necessary here but feels nice.
-    var B = Math.exp(agent.score(2));
-    var C = Math.exp(agent.score(3));
+var choicerule = function(i){
+    var agent = Infer({method:"MCMC",samples:600,lag:0,burn:200,model:agentMaker(i)}); 
+
+    //alternative if agent returns array of expected values [p1*v1,p2*v2,p3*v3]
+    var utilityPosteriors = repeat(2000,function(){sample(agent)});
+    //Take the highest average return
+    var A = Math.sum(map(function(x){x[0]},utilityPosteriors))/utilityPosteriors.length;
+    var B = Math.sum(map(function(x){x[1]},utilityPosteriors))/utilityPosteriors.length;
+    var C = Math.sum(map(function(x){x[2]},utilityPosteriors))/utilityPosteriors.length;
+
+    //choice-return option
+    // var A = Math.exp(agent.score(1))
+    // var B = Math.exp(agent.score(2))
+    // var C = Math.exp(agent.score(3))
+    
     if(A>B&&A>C)return 1;
     if(B>A&&B>C)return 2;
     if(C>A&&C>B)return 3;
-//    console.log("choices tied");//rare but could happen, rarer with higher agent samples? Tiebreaker by lottery-among-leaders:
-    var trialprobs = [Math.exp(agent.score(1)),Math.exp(agent.score(2)),Math.exp(agent.score(3))];
-    return categorical({vs:[1,2,3],ps:Vector(trialprobs)});
+    console.log("GOT A TIED CHOICE");//This should be insanely rare, bad news if it ever actually appears, look out for this?
+    error_choicerule_washout //Not defined, the error if encountered shows this name, only way I know to throw an error with an informative message from webppl. Ugh.
+//    return choicerule(i); //Alternative solution: try again! What are the odds of getting a second tie?
+}
 
-},countlist(hm_trials))
-
-
+var choices =  map(choicerule,countlist(hm_trials))
 
 // //return value. Impressions included for diag inspection.
 var ret =[trial_calcobs,ord_ABprob,ord_ACprob,ord_BCprob,ord_ABpayoff,ord_ACpayoff,ord_BCpayoff,choices];

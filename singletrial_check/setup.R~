@@ -7,10 +7,10 @@ library(rwebppl)
 starttime <- Sys.time();
 timing.df <- data.frame(fitid=c(),fittime=c()); #just looking.
 
-write_simexp_fixedagent <- function(modelname,hm_ppnts,hm_trials,calcsd,tolerance_prob,tolerance_payoff,p_err,stimtype=c("random","wedellish")[1],savepath="../",saveplots=FALSE,extraid=""){
+write_simexp_fixedagent <- function(obsflags,hm_ppnts,hm_trials,calcsd,tolerance_prob,tolerance_payoff,p_err,stimtype=c("random","wedellish")[1],savepath="../",saveplots=FALSE,extraid=""){
 
     ##added to file name of any saved output.
-    simidstring <- gsub("\\.","pt",paste0(extraid,modelname,"_calcsd",calcsd,"_tprob",tolerance_prob,"_tpay",tolerance_payoff,"_orderr",p_err,"_trials",hm_trials,"_stim",stimtype))
+    simidstring <- gsub("\\.","pt",paste0(extraid,obsflags,"_calcsd",calcsd,"_tprob",tolerance_prob,"_tpay",tolerance_payoff,"_orderr",p_err,"_trials",hm_trials,"_stim",stimtype))
     print(simidstring);#diag, cheap progress bar
     
     ##hm__ppnts is not totally moot: they all have the same params set here, but the stim presented repeat for each participant.
@@ -56,10 +56,24 @@ write_simexp_fixedagent <- function(modelname,hm_ppnts,hm_trials,calcsd,toleranc
     }
 
     ##add simulated choices
-    timer <- system.time(
                                         #simexp.df$choice
-        agentstuff <- webppl(program_file=paste0(modelname),data=simexp.df,data_var="expdf")
+        if(obsflags=="calconly"){
+            simexp.df$usecalc=TRUE
+            simexp.df$useord=FALSE
+        }
+        if(obsflags=="ordonly"){
+            simexp.df$useord=TRUE
+            simexp.df$usecalc=FALSE
+        }
+        if(obsflags=="full"){
+            simexp.df$usecalc=TRUE
+            simexp.df$useord=TRUE
+        }
+        
+    timer <- system.time(
+        agentstuff <- webppl(program_file="howes16.ppl",data=simexp.df,data_var="expdf")
     )
+    
     timing.df<<-rbind(timing.df,data.frame(simidstring,timer[["elapsed"]]));
     
     ##you could just add the choices (agentstuff[[8]]), 
@@ -166,7 +180,7 @@ write_simexp_fixedagent <- function(modelname,hm_ppnts,hm_trials,calcsd,toleranc
 
 ##Do the thing
 varycalcsd.df <- data.frame(
-    model=c(),
+    obsflags=c(),
     hm_ppnts=c(),
     hm_trials=c(),
     calcsd=c(),
@@ -179,7 +193,7 @@ varycalcsd.df <- data.frame(
 )
 
 varyorderr.df <- data.frame(
-    model=c(),
+    obsflags=c(),
     hm_ppnts=c(),
     hm_trials=c(),
     calcsd=c(),
@@ -192,20 +206,21 @@ varyorderr.df <- data.frame(
 )
 
 ##Any global settings
+saveplots=FALSE;
 hm_ppnts=1; #ppnt params are fixed, but stimuli repeat per participant, so this means 'draw fresh stimuli for every observation'
-hm_trials=1000 #10,000000 in Howes16
+hm_trials=10; #1500 #10,000000 in Howes16
 
 tolerance_prob = .011
 tolerance_payoff = 1.1
 stimtype = "random" #Must match an option in wedellExp1Stim.R, Currently accepts "random" or "wedellish". Note model priors should be on a matching scale.
-modellist = c("howes16_full.ppl","ordonly.ppl","calconly.ppl")
+obsflags = c("full","ordonly","calconly");
 
 ##left panel: vary calcsd
-p_err=.01 #fixed locally for this loop
-for(model in modellist){
+p_err=.3 #fixed locally for this loop
+for(flag in obsflags){
     for(calcsd in (seq(from=0,to=50,by=5)+.01)){#Can't deal with starting at 0, sigma of 0 in a distribution breaks webppl.
         my_performance <- write_simexp_fixedagent(
-            model=model,
+            obsflags=flag,
             hm_ppnts=hm_ppnts, 
             hm_trials=hm_trials,
             calcsd=calcsd,
@@ -214,11 +229,11 @@ for(model in modellist){
             p_err=p_err,
             stimtype=stimtype,
             savepath="output/",
-            saveplots=TRUE,
+            saveplots=saveplots,
             extraid="varycalcsd_"
         )
         varycalcsd.df <- rbind(varycalcsd.df,data.frame(
-                                                   model=model,
+                                                   obsflags=flag,
                                                    hm_ppnts=hm_ppnts, 
                                                    hm_trials=hm_trials,
                                                    calcsd=calcsd,
@@ -237,10 +252,10 @@ for(model in modellist){
 
 ##Right panel: vary orderr
 calcsd = 30;
-for(model in c(modellist)){
+for(flag in c(obsflags)){
     for(p_err in seq(from=0,to=1,by=.1)){
         my_performance <- write_simexp_fixedagent(
-            model=model,
+            obsflags=flag,
             hm_ppnts=hm_ppnts, 
             hm_trials=hm_trials,
             calcsd=calcsd,
@@ -249,11 +264,11 @@ for(model in c(modellist)){
             p_err=p_err,
             stimtype=stimtype,
             savepath="output/",
-            saveplots=TRUE,
+            saveplots=saveplots,
             extraid="varyorderr_"
         )
         varyorderr.df <- rbind(varyorderr.df,data.frame(
-                                                   model=model,
+                                                   obsflags=flag,
                                                    hm_ppnts=hm_ppnts, 
                                                    hm_trials=hm_trials,
                                                    calcsd=calcsd,
@@ -273,11 +288,13 @@ for(model in c(modellist)){
 write.csv(varycalcsd.df,file="output/performance_summary/varycalcsd.csv",row.names=FALSE)
 write.csv(varyorderr.df,file="output/performance_summary/varyorderr.csv",row.names=FALSE)
 
-varycalcsd.plot <- ggplot(varycalcsd.df,aes(x=calcsd,y=agentperformance,color=model))+geom_line()+geom_point()+geom_hline(aes(yintercept=maxperformance))+theme_bw()
-varyorderr.plot <- ggplot(varyorderr.df,aes(x=p_err,y=agentperformance,color=model))+geom_line()+geom_point()+geom_hline(aes(yintercept=maxperformance))+theme_bw()
+varycalcsd.plot <- ggplot(varycalcsd.df,aes(x=calcsd,y=agentperformance,color=obsflags))+geom_line()+geom_point()+geom_hline(aes(yintercept=maxperformance))+theme_bw()
+varyorderr.plot <- ggplot(varyorderr.df,aes(x=p_err,y=agentperformance,color=obsflags))+geom_line()+geom_point()+geom_hline(aes(yintercept=maxperformance))+theme_bw()
 
 ggsave(varycalcsd.plot,file="varycalcsd_performance.png")
 ggsave(varyorderr.plot,file="varyorderr_performance.png")
 
 #print(varycalcsd.plot); x11(); print(varyorderr.plot); #popup when done.
 endtime=Sys.time();
+
+save.image(file="fig3check.RData")
