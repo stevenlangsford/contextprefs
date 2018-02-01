@@ -34,3 +34,4 @@ compareall.df <- rbind(compareA.df,compareB.df,compareC.df)
 compareall.plot <- ggplot(compareall.df,aes(x=sample,group=trialtype,color=trialtype))+geom_density()+facet_wrap(~plotframe)+theme_bw()
 return(compareall.plot)
 }
+

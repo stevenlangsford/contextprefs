@@ -6,7 +6,7 @@ library(rwebppl)
 ppnt_calcsd = 5
 ppnt_tolerance_prob = .011
 ppnt_tolerance_payoff = 1.1
-ppnt_orderror =.2
+ppnt_orderror =.15
 
 ##modelparams: passed in with each row, just to avoid having multiple model files.
 useord = TRUE
@@ -54,7 +54,6 @@ rangetie.trial <- data.frame(
     payoffprior_sd= 10,
     trial_id="rangetie"
 )
-
 
 ##Wedell text examples: Note DIFFERENT PRIORS ON PAYOFF
 wedellR.trial <- data.frame(
@@ -143,7 +142,7 @@ wedellF_tinydecoy.trial <- data.frame(
 )
 
 
-simexp.df <- rbind(wedellF.trial,wedellF_tinydecoy.trial) #rbind(wedellR.trial,wedellR_tinydecoy.trial) #identicaltriplet.trial
+simexp.df <- wedellR.trial #rbind(wedellR.trial,wedellR_tinydecoy.trial) #identicaltriplet.trial, wedellR.trial# rbind(wedellF.trial,wedellF_tinydecoy.trial)
 fit <- webppl(program_file="howes16.ppl",data=simexp.df,data_var="expdf",packages="webppl-json")
 
 simexp.df$choice <- fit[[8]] ##most important bit
@@ -168,7 +167,8 @@ infostring <<- paste(calcinfo,ordinfo,"choice",choice);
 })
 
 source("vis.R")
-#choice.plot <- choiceVis("identicaltriplets",infostring)
-#print(choice.plot)
+choice.plot <- choiceVis("wedellR",infostring)
+print(choice.plot)
 #ggsave(choice.plot,file="storyplots/wedellR_calc5_ord0pt2.png")
-decoyImpact("wedellF","none")
+
+#decoyImpact("wedellR")

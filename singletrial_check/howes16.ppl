@@ -32,6 +32,8 @@ var usecalc = map(function(arow){arow["usecalc"]},expdf)
 var payoffprior_mean = map(function(arow){arow["payoffprior_mean"]},expdf)
 var payoffprior_sd = map(function(arow){arow["payoffprior_sd"]},expdf)
 var trial_id = map(function(arow){arow["trial_id"]},expdf)
+var row_id = map(function(arow){arow["row_id"]},expdf)
+
 //derived setup params-of-interest
 var hm_ppnts = max(map(function(arow){arow["ppntid"]},expdf))+1;//+1 because id's start from 0. Basically countlist(hm_ppnts) must give indexes into an array that is hm_ppnts long. Starting from 0 in exp.df and adding one here does this. https://xkcd.com/163/
 var hm_trials = expdf.length;
@@ -108,7 +110,7 @@ var agentMaker = function(i){
 
 
 var choicerule = function(i){
-    var agent = Infer({method:"MCMC",samples:15500,lag:0,burn:1000,model:agentMaker(i)}); 
+    var agent = Infer({method:"MCMC",samples:5000,lag:0,burn:1000,model:agentMaker(i)}); 
 
     //alternative if agent returns array of expected values [p1*v1,p2*v2,p3*v3]
     var utilityPosteriors = repeat(18000,function(){sample(agent)});
@@ -123,9 +125,9 @@ var choicerule = function(i){
     // var C = Math.exp(agent.score(3))
     
 
-    json.write(trial_id[i]+'_Adistribution.json', map(function(x){x[0]},utilityPosteriors));
-    json.write(trial_id[i]+'_Bdistribution.json', map(function(x){x[1]},utilityPosteriors));
-    json.write(trial_id[i]+'_Cdistribution.json', map(function(x){x[2]},utilityPosteriors));
+    // json.write("trialimpressions/"+trial_id[i]+'row'+row_id[i]+'_Adistribution.json', map(function(x){x[0]},utilityPosteriors));
+    // json.write("trialimpressions/"+trial_id[i]+'row'+row_id[i]+'_Bdistribution.json', map(function(x){x[1]},utilityPosteriors));
+    // json.write("trialimpressions/"+trial_id[i]+'row'+row_id[i]+'_Cdistribution.json', map(function(x){x[2]},utilityPosteriors));
     
     if(A>B&&A>C)return 1;
     if(B>A&&B>C)return 2;
