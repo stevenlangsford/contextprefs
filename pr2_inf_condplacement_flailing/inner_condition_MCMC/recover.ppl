@@ -1,0 +1,108 @@
+//helper functions
+//finds hm_ppnts from ppntid, **assumed to be consecutive ints starting at 0**
+var max = function(arr){reduce(function(a,b){if(a>b)return a; else return b;},arr[0],arr)};
+
+//alternative to looping over rows, use map over a countlist(arr.length) index
+var countlist = function(n){
+    var countdown = function(n){//So ugly! But if you're gonna use this as an index, it makes more sense/keeps correct correspondances in count-up order.
+	if(n<=0) return [];
+	return [n-1].concat(countdown(n-1));
+    }
+    countdown(n).reverse()
+}
+//get the data.df in more convenient lists:
+var ppntid = map(function(arow){arow["ppntid"]},expdf)
+var probA = map(function(arow){arow["probA"]},expdf)
+var probB = map(function(arow){arow["probB"]},expdf)
+var probC = map(function(arow){arow["probC"]},expdf)
+var payoffA = map(function(arow){arow["payoffA"]},expdf)
+var payoffB = map(function(arow){arow["payoffB"]},expdf)
+var payoffC = map(function(arow){arow["payoffC"]},expdf)
+var choices = map(function(arow){arow["choice"]},expdf)//Agent's choice is now in the input data.
+//var ppnt_calcsd = map(function(arow){arow["calc_sd"]},expdf) //gonna try to infer this!
+var ppnt_tolerance_prob  = map(function(arow){arow["tolerance_prob"]},expdf)
+var ppnt_tolerance_payoff = map(function(arow){arow["tolerance_payoff"]},expdf)
+var ppnt_orderror = map(function(arow){arow["p_err"]},expdf)
+//model setup, switch observation types on and off, set appropriate payoff priors. Can delete all these eventually.
+var useord = map(function(arow){arow["useord"]},expdf)
+var usecalc = map(function(arow){arow["usecalc"]},expdf)
+var payoffprior_mean = map(function(arow){arow["payoffprior_mean"]},expdf)
+var payoffprior_sd = map(function(arow){arow["payoffprior_sd"]},expdf)
+var row_id = map(function(arow){arow["row_id"]},expdf)
+
+//derived setup params-of-interest
+var hm_ppnts = max(map(function(arow){arow["ppntid"]},expdf))+1;//+1 because id's start from 0. Basically countlist(hm_ppnts) must give indexes into an array that is hm_ppnts long. Starting from 0 in exp.df and adding one here does this. https://xkcd.com/163/
+var hm_trials = expdf.length;
+
+var recover_agentparams = function(){
+    //population parameters (don't exist yet, but would go here)
+var agent_params = map(function(appnt){
+    //ppnt params
+    var my_calcsd = Math.abs(gaussian({mu:10,sigma:5}));
+
+    //do observations: trial by trial (no return value, just here to do conditioning)
+    map(function(atrial){
+	//ppnt made some observation
+	var calcobs =
+	    [probA[atrial]*payoffA[atrial]+gaussian({mu:0,sigma:my_calcsd}),
+	     probB[atrial]*payoffB[atrial]+gaussian({mu:0,sigma:my_calcsd}),
+	     probC[atrial]*payoffC[atrial]+gaussian({mu:0,sigma:my_calcsd})
+	    ];
+	
+	var ordrelation = function(a,b,tolerance){
+	    if(flip(ppnt_orderror[atrial])) return categorical({vs:["<","=",">"],ps:[1,1,1]});
+	    if(Math.abs(a-b)<tolerance) return "=";
+	    if(a>b) return ">";
+	    if(a<b) return "<";
+	}
+	var ord_ABprob = ordrelation(probA[atrial],probB[atrial],ppnt_tolerance_prob[atrial]);
+	var ord_ACprob = ordrelation(probA[atrial],probC[atrial],ppnt_tolerance_prob[atrial]);
+	var ord_BCprob = ordrelation(probB[atrial],probC[atrial],ppnt_tolerance_prob[atrial]);
+	var ord_ABpayoff = ordrelation(payoffA[atrial],payoffB[atrial],ppnt_tolerance_payoff[atrial]);
+	var ord_ACpayoff = ordrelation(payoffA[atrial],payoffC[atrial],ppnt_tolerance_payoff[atrial]);
+	var ord_BCpayoff = ordrelation(payoffB[atrial],payoffC[atrial],ppnt_tolerance_payoff[atrial]);
+
+	var agentfunction = function(){
+	    var agent_probs = repeat(3,function(){sample(Beta({a:1,b:1}))});
+	    var agent_payoffs = repeat(3,function(){sample(
+	    	Gaussian({mu:payoffprior_mean[atrial],sigma:payoffprior_sd[atrial]})
+	    )});
+
+	    observe(Gaussian({mu:agent_probs[0]*agent_payoffs[0],sigma:my_calcsd}),calcobs[0])
+	    observe(Gaussian({mu:agent_probs[1]*agent_payoffs[1],sigma:my_calcsd}),calcobs[1])
+	    observe(Gaussian({mu:agent_probs[2]*agent_payoffs[2],sigma:my_calcsd}),calcobs[2])
+
+	    condition(ord_ABprob== ordrelation(agent_probs[0],agent_probs[1],ppnt_tolerance_prob[atrial]));
+	    condition( ord_ACprob == ordrelation(agent_probs[0],agent_probs[2],ppnt_tolerance_prob[atrial]));
+	    condition(ord_BCprob == ordrelation(agent_probs[1],agent_probs[2],ppnt_tolerance_prob[atrial]));
+	    condition(ord_ABpayoff== ordrelation(agent_payoffs[0],agent_payoffs[1],ppnt_tolerance_payoff[atrial]));
+	    condition( ord_ACpayoff == ordrelation(agent_payoffs[0],agent_payoffs[2],ppnt_tolerance_payoff[atrial]));
+	    condition(ord_BCpayoff == ordrelation(agent_payoffs[1],agent_payoffs[2],ppnt_tolerance_payoff[atrial]));
+	    
+	    var A = agent_probs[0]*agent_payoffs[0];
+	    var B = agent_probs[1]*agent_payoffs[1];
+	    var C = agent_probs[2]*agent_payoffs[2];
+
+	    //console.log((A>B&&A>C ? 1 : B>A&&B>C ? 2 : 3)==choices[atrial])//delete
+	    
+	    condition( (A>B&&A>C ? 1 : B>A&&B>C ? 2 : 3)==choices[atrial]) //informs calc and ord obs for this judgment but also ppnt params like calc_sd
+
+	    //return value not used anymore, relying on 'side-effect' condition call above. Is this legit?
+	    if(A>B&&A>C)return 1;
+	    if(B>A&&B>C)return 2;
+	    if(C>A&&C>B)return 3;
+	    agent_washout_error
+	}//end agentfunction
+	
+	//note pretty minimal number of samples here.
+	var agent = Infer({method:'MCMC',samples:500,burn:100,model:agentfunction});
+	
+    },filter(function(i){ppntid[i]==appnt},countlist(hm_trials)))//map only over trials with this participant.
+    
+    return my_calcsd
+    },countlist(hm_ppnts))
+    
+    return agent_params
+}
+
+Infer({method:"MCMC",samples:200,burn:50,model:recover_agentparams});
