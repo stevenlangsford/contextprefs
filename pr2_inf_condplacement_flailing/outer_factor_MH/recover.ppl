@@ -91,8 +91,7 @@ var agent_params = map(function(appnt){
 	    if(B>A&&B>C)return 2;
 	    if(C>A&&C>B)return 3;
 	    //	    agent_washout_error
-	    console.log("*WASHOUT*")
-	    console.log("A:"+A+" B:"+B+" C:"+C);
+	    console.log("washout error A:"+A+" B:"+B+" C:"+C);
 	}//end agentfunction
 	
 	//note pretty minimal number of samples here.

@@ -92,7 +92,7 @@ var recover_agentparams = function(){
 	    if(A>B&&A>C)return 1;
 	    if(B>A&&B>C)return 2;
 	    if(C>A&&C>B)return 3;
-	    agent_washout_error
+	    console.log("washout "+A+":"+B+":"+C);
 	}//end agentfunction
 	
 	//note pretty minimal number of samples here.
