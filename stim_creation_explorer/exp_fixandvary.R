@@ -1,0 +1,42 @@
+library(tidyverse)
+library(rwebppl)
+rm(list=ls())
+hm_ppnts = 2
+ppnt_calcsd <- c(8,20)
+ppnt_tolerance_prob <- rep(.01,hm_ppnts) #replicate(times,function()) if you want to call a function to generate each value
+ppnt_tolerance_payoff <- rep(1.1,hm_ppnts)
+ppnt_orderror <- rep(.1,hm_ppnts)
+useord <- TRUE
+usecalc <- TRUE
+
+set.seed(4)
+source("stim_creation.R")
+simexp.df <- data.frame();
+
+#fix expectation at 100, walk prob,payoff of A and B outwards in a balanced way
+for(stepsize in seq(from=.1,to=5,length=35)){
+    simexp.df <- rbind(simexp.df,getTradeoffTrial(stepsize))#stepsize moves payoff, prob follows to give expectation of 50
+}
+
+##fix at payoff 100, step probs out.
+for(stepsize in seq(from=0,to=.25,length=35)){
+    simexp.df <- rbind(simexp.df,getCustomTrial(probA=.5-stepsize,probB=.5,probC=.5+stepsize))
+}
+
+#fix prob at .5, step payoffs out
+for(stepsize in seq(from=0,to=5,length = 35)){
+    simexp.df <- rbind(simexp.df,getCustomTrial(payoffA=100-stepsize,payoffB=100,payoffC=100+stepsize))
+}
+
+write.csv(simexp.df,file="fixandvarystim.csv",row.names=FALSE);
+simexp.df <- bulkAssignStim(simexp.df)
+
+hm.repeats <- 500
+for(i in 1:hm.repeats){
+    newchoice <- addChoices(simexp.df)
+    simexp.df[,paste0("choice",i)] <- newchoice$choice
+}
+
+write.csv(simexp.df,file="fixandvary_withchoices.csv",row.names=FALSE)
+
+View("DONE") #popup. woo

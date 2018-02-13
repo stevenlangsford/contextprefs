@@ -1,0 +1,31 @@
+[experiment]
+alphaEnv = 1.0
+betaShape = 1
+vMean = 0
+vLocation = 19
+vScale = 8
+vDF = 100
+valJitterSD = 0
+taskSet = test-tasks.csv
+pvCorrelation = 0
+
+[agent]
+agentType = 3
+alpha = 1.0
+probOrdinalError =  0.1
+probOrdinalDropped = 0
+utilSD = 0.5
+pSD = 0.0
+vSD = 0.0
+softMaxTemp = 0.15
+pThreshold = 0.011
+vThreshold = 1.1
+sigScale = 0.2
+sigOffset = 0
+uBins = 80
+
+[simulation]
+evTableTrials = 1000000000
+choiceTestTrials = 1000000
+utilTrials = 10000000
+agentInnerLoop = 1

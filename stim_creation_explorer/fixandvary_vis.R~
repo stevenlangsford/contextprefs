@@ -1,0 +1,10 @@
+library(tidyverse)
+choices.df <- read.csv("fixandvary_withchoices.csv")
+choices.df$stimset <- rep(c("fix_expectation","fix_payoff","fix_prob"),each=35*2)
+
+choices.df$hm_A <- select(choices.df,contains("choice"))%>%apply(1,function(x){sum(x==1)})
+choices.df$hm_B <- select(choices.df,contains("choice"))%>%apply(1,function(x){sum(x==2)})
+choices.df$hm_C <- select(choices.df,contains("choice"))%>%apply(1,function(x){sum(x==3)})
+
+
+ggplot(filter(choices.df,stimset=="fix_payoff"),aes(x=abs(payoffA-payoffB),y=choices)

@@ -1,4 +1,5 @@
 library(tidyverse)
+library(rwebppl)
 ##Supports simulated-experiment building scripts
 #Assumes the participant setup is done before any of these functions are called
 ##Functions: append.expectation(exp.df), assignStim(stim,ppntid), getXYZTrial,addChoices(simexp.df)
@@ -24,7 +25,7 @@ if(!exists("usecalc"))stop("Sourced stim_creation without ppnt inits set")
 
 
 ##helper functions
-append.expectation <- function(stim.df){
+appendExpectation <- function(stim.df){
     stim.df$exA <- stim.df$probA*stim.df$payoffA
     stim.df$exB <- stim.df$probB*stim.df$payoffB
     stim.df$exC <- stim.df$probC*stim.df$payoffC
@@ -46,7 +47,7 @@ assignStim <- function(stim,ppntid){
     return(stim);
 }
 
-bulk.assignStim <- function(stim.df){
+bulkAssignStim <- function(stim.df){
     ret.df <- data.frame()
     for(i in 1:nrow(stim.df)){
         for(ppnt in 1:hm_ppnts){
@@ -80,6 +81,23 @@ getRandomTrial <- function(){
     )
 }
 
+##sets default args for everything, just fix the things you want to change.
+getCustomTrial <- function(probA=.5,probB=.5,probC=.5,payoffA=100,payoffB=100,payoffC=100,payoffprior_mean=100,payoffprior_sd=5){
+    return(
+        data.frame(
+            probA = probA,
+            probB = probB,
+            probC = probC,
+            payoffA = payoffA,
+            payoffB = payoffB,
+            payoffC = payoffC,
+            
+            payoffprior_mean= payoffprior_mean,
+            payoffprior_sd= payoffprior_sd
+        )
+    )
+}
+
 getWedellesqueTrial <- function(){
     #Not very wedellesque to just mix and match! Oh well.
     prob.dist <- function(){
@@ -101,6 +119,13 @@ getWedellesqueTrial <- function(){
             payoffprior_sd= 8.5
             )
     )
+}
+
+#fixed expectation of all options at 50, B is (.5,100), payoffA is 100-stepsize, payoffC is 100+stepsize, probs adjusted to make all expectations equal.
+getTradeoffTrial <- function(payoff_stepsize){
+    probA=50/(100-payoff_stepsize)
+    probC=50/(100+payoff_stepsize)
+    return(getCustomTrial(probA=probA,probC=probC,payoffA=100-payoff_stepsize,payoffC=100+payoff_stepsize))#everything else is default-town.
 }
 
 getSetSpreadTrial <- function(stepsize){

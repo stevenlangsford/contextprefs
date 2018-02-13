@@ -1,0 +1,7 @@
+library(tidyverse)
+rm(list=ls())
+test.trials.df <- read.csv("mimic_testtrials.csv")
+
+choice.df <- test.trials.df%>%gather(choicenumber,optionchosen,choice1:choice500)%>%
+    group_by(X)%>%summarize(propA=sum(optionchosen==1)/n(),propB=sum(optionchosen==2)/n(),propC=sum(optionchosen==3)/n())%>%
+    ungroup()
