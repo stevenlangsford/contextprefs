@@ -1,0 +1,25 @@
+library(tidyverse)
+library(rwebppl)
+rm(list=ls())
+set.seed(4);
+
+hm_ppnts = 1
+ppnt_calcsd <- 10
+ppnt_tolerance_prob <- rep(.01,hm_ppnts) 
+ppnt_tolerance_payoff <- rep(1.1,hm_ppnts)
+ppnt_orderror <- rep(.1,hm_ppnts)
+useord <- TRUE
+usecalc <- TRUE
+
+source("stim_creation.R")
+stim.df <- data.frame()
+for(i in 1:1000){
+    stim.df <- rbind(stim.df,getRandomTrial())
+}
+
+write.csv(stim.df,"horserace_stim.csv",row.names=FALSE)
+
+stim.df <- bulkAssignStim(stim.df)
+
+stim.df <- addChoices(stim.df)
+write.csv(stim.df,"horserace_webpplchoices_sd10.csv",row.names=FALSE)

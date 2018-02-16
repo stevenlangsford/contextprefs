@@ -1,0 +1,101 @@
+//setup params: currently looking in the wedell sort of range.
+var getProbSearchspace = function(){return Beta({a:1,b:1})}
+var getPayoffSearchspace = function(){return Uniform({a:10,b:30})}
+
+//these are the priors for the agent
+var getProbDist=function(){return Beta({a:1,b:1})}
+var getPayoffDist=function(){return Gaussian({mu:19,sigma:8})}
+
+//agent params: todo, pass as df, allow more than two agents?
+var ppnt_calcsd = [3,10];
+var ppnt_tolerance_prob=[.011,.011];
+var ppnt_tolerance_payoff=[1.1,1.1];
+var ppnt_perr=[0.1,0.1];
+
+//main worker function:
+var searcher = function(){
+    var probA = sample(getProbSearchspace());
+    var probB = sample(getProbSearchspace());
+    var probC = sample(getProbSearchspace());
+    var payoffA = sample(getPayoffSearchspace());
+    var payoffB = sample(getPayoffSearchspace());
+    var payoffC = sample(getPayoffSearchspace());
+
+
+    var getAgentDecisionFunction = function(calc_sd,tolerance_prob,tolerance_payoff,p_err){
+	return function(){
+	//assumes agent is using 'good' priors matching the environment set up top.
+	var agent_pA = sample(getProbDist());
+	var agent_pB = sample(getProbDist());
+	var agent_pC = sample(getProbDist());
+	var agent_payoffA = sample(getPayoffDist());
+	var agent_payoffB = sample(getPayoffDist());
+	var agent_payoffC = sample(getPayoffDist());
+
+	var ordrelation = function(a,b,tolerance,orderr){
+	    if(flip(orderr)) return categorical({vs:["<","=",">"],ps:[1,1,1]});
+	    if(Math.abs(a-b)<tolerance) return "=";
+	    if(a>b) return ">";
+	    if(a<b) return "<";
+	}
+
+	var calcobsA = gaussian({mu:probA*payoffA,sigma:calc_sd});
+	var calcobsB = gaussian({mu:probB*payoffB,sigma:calc_sd});
+	var calcobsC = gaussian({mu:probC*payoffC,sigma:calc_sd});
+
+	var probAB = ordrelation(probA,probB,tolerance_prob,p_err);
+	var probAC = ordrelation(probA,probC,tolerance_prob,p_err);
+	var probBC = ordrelation(probB,probC,tolerance_prob,p_err);
+	var payoffAB = ordrelation(payoffA,payoffB,tolerance_payoff,p_err);
+	var payoffAC = ordrelation(payoffA,payoffC,tolerance_payoff,p_err);
+	var payoffBC = ordrelation(payoffB,payoffC,tolerance_payoff,p_err);
+
+	//push agent beliefs towards truth via calc and ord observation
+	observe(Gaussian({mu:agent_pA*agent_payoffA,sigma:calc_sd}),calcobsA)
+	observe(Gaussian({mu:agent_pB*agent_payoffB,sigma:calc_sd}),calcobsB)
+	observe(Gaussian({mu:agent_pC*agent_payoffC,sigma:calc_sd}),calcobsC)
+
+	condition(ordrelation(agent_pA,agent_pB,tolerance_prob,p_err)==probAB);
+	condition(ordrelation(agent_pA,agent_pC,tolerance_prob,p_err)==probAC);
+	condition(ordrelation(agent_pB,agent_pC,tolerance_prob,p_err)==probBC);
+	condition(ordrelation(agent_payoffA,agent_payoffB,tolerance_payoff,p_err)==payoffAB);
+	condition(ordrelation(agent_payoffA,agent_payoffC,tolerance_payoff,p_err)==payoffAC);
+	condition(ordrelation(agent_payoffB,agent_payoffC,tolerance_payoff,p_err)==payoffBC);
+
+	var A = agent_pA*agent_payoffA;
+	var B = agent_pB*agent_payoffB;
+	var C = agent_pC*agent_payoffC;
+
+	    return (A > B && A > C) ? 1 : (B > A && B > C) ? 2 : 3;
+	}//end decision function
+    }//end getAgentDecisionFunction
+
+    var getChoice = function(decisionfn){
+	var agent = Infer({method:'MCMC',samples:1000,burn:200,model:decisionfn});
+	var A = Math.exp(agent.score(1))
+	var B = Math.exp(agent.score(2))
+	var C = Math.exp(agent.score(3))
+	return (A > B && A > C) ? 1 : (B > A && B > C) ? 2 : 3;
+    }
+    
+    var decision1 = getChoice(getAgentDecisionFunction(ppnt_calcsd[0],ppnt_tolerance_prob[0],ppnt_tolerance_payoff[0],ppnt_perr[0]));
+    var decision2 = getChoice(getAgentDecisionFunction(ppnt_calcsd[1],ppnt_tolerance_prob[1],ppnt_tolerance_payoff[1],ppnt_perr[1]));
+
+    condition(decision1!=decision2); //disagrement between agents is good.
+    //but having two identical options with prob inside tolerance, payoff inside tolerance, is a BS way to get high disagreement. Cull these.
+    var notTwins = function(prob1,payoff1, prob2,payoff2){
+	return Math.abs(prob1-prob2) > .011 || Math.abs(payoff1-payoff2) > 1.1;//using default tolerance vals, could use min(ppnt_tolerance) or mean(ppnt_tolerance)?
+    }
+    //A==B
+    condition(notTwins(probA,payoffA,probB,payoffB))
+    //A==C
+    condition(notTwins(probA,payoffA,probC,payoffC))
+    //B==C
+    condition(notTwins(probB,payoffB,probC,payoffC))
+    
+    var stimvals = [probA,probB,probC,payoffA,payoffB,payoffC];
+    return stimvals;
+
+}//end searcher
+
+Infer({method:"SMC",particles:rparams[0]["hm_particles"],rejuvSteps:5,model:searcher});
