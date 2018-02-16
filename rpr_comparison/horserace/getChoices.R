@@ -4,7 +4,7 @@ rm(list=ls())
 set.seed(4);
 
 hm_ppnts = 1
-ppnt_calcsd <- 30
+ppnt_calcsd <- 50
 ppnt_tolerance_prob <- rep(.01,hm_ppnts) 
 ppnt_tolerance_payoff <- rep(1.1,hm_ppnts)
 ppnt_orderror <- rep(.1,hm_ppnts)
@@ -22,4 +22,4 @@ write.csv(stim.df,"horserace_stim.csv",row.names=FALSE)
 stim.df <- bulkAssignStim(stim.df)
 
 stim.df <- addChoices(stim.df)
-write.csv(stim.df,"horserace_webpplchoices_sd30.csv",row.names=FALSE)
+write.csv(stim.df,"horserace_webpplchoices_sd50.csv",row.names=FALSE)

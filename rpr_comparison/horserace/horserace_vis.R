@@ -9,13 +9,13 @@ appendExpectation <- function(stim.df){
     return(stim.df)
 }
 
-ppl.df <- read.csv("horserace_webpplchoices_sd5.csv")%>%select(1:6,choice)%>%appendExpectation #sd10 choices match sd5 ones at 0.929, return is indistinguishable.
+ppl.df <- read.csv("horserace_webpplchoices_sd50.csv")%>%select(1:6,choice)%>%appendExpectation #sd10 choices match sd5 ones at 0.929, return is indistinguishable.
 for(i in 1:nrow(ppl.df)){
     ppl.df[i,"agentReturn"] <- ppl.df[i,c("exA","exB","exC")][ppl.df[i,"choice"]]
     ppl.df[i,"oracleReturn"] <- max(ppl.df[i,c("exA","exB","exC")])
 }
 
-rpr.df <- read.csv("horserace_rprchoices.csv")%>%select(4:9,ChoicesMadeCount,Achoices,Bchoices,Dchoices)%>%
+rpr.df <- read.csv("rpr_sd50.csv")%>%select(4:9,ChoicesMadeCount,Achoices,Bchoices,Dchoices)%>%
     mutate(propA=Achoices/ChoicesMadeCount,
            propB=Bchoices/ChoicesMadeCount,
            propC=Dchoices/ChoicesMadeCount
@@ -46,4 +46,4 @@ horserace.plot <- ggplot(horserace.df,aes(x=model,y=winnings))+
     ylab("Average return on choices")+
     theme_bw()
 
-#ggsave(horserace.plot,file="maximization_performance.png")
+ggsave(horserace.plot,file="maximization_performance_sd50.png")
