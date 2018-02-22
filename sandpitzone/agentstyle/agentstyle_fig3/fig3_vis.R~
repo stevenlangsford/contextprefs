@@ -1,0 +1,47 @@
+library(tidyverse)
+rm(list=ls())
+
+appendExpectation <- function(stim.df){
+    stim.df$exA <- stim.df$probA*stim.df$payoffA
+    stim.df$exB <- stim.df$probB*stim.df$payoffB
+    stim.df$exC <- stim.df$probC*stim.df$payoffC
+
+    return(stim.df)
+}
+
+
+
+## varycalc.df <- read.csv("varycalcsd.csv")%>%appendExpectation
+
+## for(i in 1:nrow(varycalc.df)){
+##     varycalc.df[i,"bothReturn"] <- varycalc.df[i,paste0("ex",varycalc.df[i,"choice_both"])]
+##     varycalc.df[i,"ordonlyReturn"] <- varycalc.df[i,paste0("ex",varycalc.df[i,"choice_ordonly"])]
+##     varycalc.df[i,"calconlyReturn"] <- varycalc.df[i,paste0("ex",varycalc.df[i,"choice_calconly"])]
+##     varycalc.df[i,"oracleReturn"] <- max(varycalc.df[i,c("exA","exB","exC")])
+## }
+
+## calcplot.df <- varycalc.df%>%select(calcsd,contains("Return"))%>%
+##     gather(modeltype,value,bothReturn:oracleReturn)%>%
+##     group_by(calcsd,modeltype)%>%
+##     summarize(meanreturn=mean(value))%>%
+##     ungroup()
+
+## ggplot(plot.df,aes(x=calcsd,y=meanreturn,color=modeltype))+geom_point()+geom_line()+theme_bw()
+
+
+varyord.df <- read.csv("varyorderr.csv")%>%appendExpectation
+
+for(i in 1:nrow(varyord.df)){
+    varyord.df[i,"bothReturn"] <- varyord.df[i,paste0("ex",varyord.df[i,"choice_both"])]
+    varyord.df[i,"ordonlyReturn"] <- varyord.df[i,paste0("ex",varyord.df[i,"choice_ordonly"])]
+    varyord.df[i,"calconlyReturn"] <- varyord.df[i,paste0("ex",varyord.df[i,"choice_calconly"])]
+    varyord.df[i,"oracleReturn"] <- max(varyord.df[i,c("exA","exB","exC")])
+}
+
+ordplot.df <- varyord.df%>%select(orderror,contains("Return"))%>%
+    gather(modeltype,value,bothReturn:oracleReturn)%>%
+    group_by(orderror,modeltype)%>%
+    summarize(meanreturn=mean(value))%>%
+    ungroup()
+
+ggplot(ordplot.df,aes(x=orderror,y=meanreturn,color=modeltype))+geom_point()+geom_line()+theme_bw()

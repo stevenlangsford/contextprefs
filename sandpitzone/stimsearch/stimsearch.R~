@@ -52,6 +52,6 @@ for(i in 1:20){
     test.df[,paste0("choice",i)] <- newchoice$choice
 }
 
-write.csv(test.df,"testdf.csv",row.names=FALSE)
+write.csv("testdf.csv",row.names=FALSE)
 source("agreement_vis.R")
 }

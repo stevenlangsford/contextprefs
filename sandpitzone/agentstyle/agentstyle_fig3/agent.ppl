@@ -1,0 +1,127 @@
+//helper functions
+var countlist = function(n){
+    var countdown = function(n){//So ugly! But if you're gonna use this as an index, it makes more sense/keeps correct correspondances in count-up order.
+	if(n<=0) return [];
+	return [n-1].concat(countdown(n-1));
+    }
+    countdown(n).reverse()
+}
+
+//read data
+var ppntid = map(function(arow){arow["ppntid"]},expdf)
+var probA = map(function(arow){arow["probA"]},expdf)
+var probB = map(function(arow){arow["probB"]},expdf)
+var probC = map(function(arow){arow["probC"]},expdf)
+var payoffA = map(function(arow){arow["payoffA"]},expdf)
+var payoffB = map(function(arow){arow["payoffB"]},expdf)
+var payoffC = map(function(arow){arow["payoffC"]},expdf)
+//extra agent param setting for choice creation:
+var ppnt_calcsd = map(function(arow){arow["calc_sd"]},expdf)
+var ppnt_tolerance_prob  = map(function(arow){arow["tolerance_prob"]},expdf)
+var ppnt_tolerance_payoff = map(function(arow){arow["tolerance_payoff"]},expdf)
+var ppnt_orderror = map(function(arow){arow["p_err"]},expdf)
+//model setup, switch observation types on and off, set appropriate payoff priors. Can delete all these eventually.
+var useord = map(function(arow){arow["useord"]},expdf)
+var usecalc = map(function(arow){arow["usecalc"]},expdf)
+var payoffprior_mean = map(function(arow){arow["payoffprior_mean"]},expdf)
+var payoffprior_sd = map(function(arow){arow["payoffprior_sd"]},expdf)
+
+// //do the work:
+map(
+    function(i){
+
+	var probprior = Beta({a:1,b:1});
+	var payoffprior = Gaussian({mu:payoffprior_mean[i],sigma:payoffprior_sd[i]});
+    
+	var my_calcsd = ppnt_calcsd[i];
+	
+	var my_prob_tolerance = ppnt_tolerance_prob[i];
+	var my_payoff_tolerance = ppnt_tolerance_payoff[i];
+	
+	var my_orderr = ppnt_orderror[i];
+	
+	var ordrelation = function(a,b,tolerance,orderr){
+	    if(flip(my_orderr)) {
+		return categorical({vs:["<","=",">"],ps:[1,1,1]});
+	    }
+	    if(Math.abs(a-b)<tolerance) return "=";
+	    if(a>b) return ">";
+	    if(a<b) return "<";
+	}
+
+	var getPercept= function(pA,vA,pB,vB,pC,vC){
+	    var ret = {
+		calcA:gaussian({mu:pA*vA,sigma:my_calcsd}),
+		calcB:gaussian({mu:pB*vB,sigma:my_calcsd}),
+		calcC:gaussian({mu:pC*vC,sigma:my_calcsd}),
+		probAB:ordrelation(pA,pB,my_prob_tolerance,my_orderr),
+		probAC:ordrelation(pA,pC,my_prob_tolerance,my_orderr),
+		probBC:ordrelation(pB,pC,my_prob_tolerance,my_orderr),
+		payoffAB:ordrelation(vA,vB,my_payoff_tolerance,my_orderr),
+		payoffAC:ordrelation(vA,vC,my_payoff_tolerance,my_orderr),
+		payoffBC:ordrelation(vB,vC,my_payoff_tolerance,my_orderr)
+	    };
+	    return ret;
+	}
+
+	var sampleState = function(percept){
+	    var pA = sample(probprior);
+	    var pB = sample(probprior);
+	    var pC = sample(probprior);
+	    var vA = sample(payoffprior);
+	    var vB = sample(payoffprior);
+	    var vC = sample(payoffprior);
+	    
+	    if(usecalc[i]==true){
+		observe(Gaussian({mu:pA*vA,sigma:my_calcsd}),percept.calcA);
+		observe(Gaussian({mu:pB*vB,sigma:my_calcsd}),percept.calcB);
+		observe(Gaussian({mu:pC*vC,sigma:my_calcsd}),percept.calcC);
+	    }
+	    if(useord[i]==true){
+		condition(ordrelation(pA,pB,my_prob_tolerance,my_orderr)==percept.probAB);
+		condition(ordrelation(pA,pC,my_prob_tolerance,my_orderr)==percept.probAC);
+		condition(ordrelation(pB,pC,my_prob_tolerance,my_orderr)==percept.probBC);
+		condition(ordrelation(vA,vB,my_payoff_tolerance,my_orderr)==percept.payoffAB);
+		condition(ordrelation(vA,vC,my_payoff_tolerance,my_orderr)==percept.payoffAC);
+		condition(ordrelation(vB,vC,my_payoff_tolerance,my_orderr)==percept.payoffBC);
+	    }
+	    
+	    return {
+		probA:pA,//probprior,//sample(probprior),
+		payoffA:vA,
+		probB:pB,
+		payoffB:vB,
+		probC:pC,
+		payoffC:vC
+	    }
+	}
+
+	var utility = function(state,action){
+	    return state["prob"+action]*state["payoff"+action];
+	}
+
+	var actions = ["A","B","C"];
+
+	var agent = function() {  
+	    var action = uniformDraw(actions);
+	    var expectedUtility = function(action){    
+		return expectation(Infer({method:"incrementalMH",samples:100,burn:10, //method:"SMC", particles:250, rejuvSteps:5  // Is one better?
+					  model() {
+					      var state = sampleState(getPercept(probA[i],payoffA[i],probB[i],payoffB[i],probC[i],payoffC[i]));
+					      return utility(state, action);
+					  }}));
+	    };
+	    factor(expectedUtility(action));
+	    return action;
+	};
+	
+	var choice_eval = Infer({ model: agent }); //Should specify sampler? What're you getting here?
+	//var softmax = sample(choice_eval); //Might need to keep this for tractable inference even though it is suboptimal!
+	var A = choice_eval.score("A");
+	var B = choice_eval.score("B");
+	var C = choice_eval.score("C");
+//	console.log(A+":"+B+":"+C);
+	var bestoption = A>B&&A>C ? "A" : B>A&&B>C ? "B" : "C";
+	var ret = bestoption;//[softmax,bestoption]
+	return ret;
+    },countlist(expdf.length));//end map for every row in data frame.

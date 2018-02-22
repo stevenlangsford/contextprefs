@@ -1,0 +1,7 @@
+library(tidyverse)
+
+ret.ls <- list()
+
+for(i in 1:20){
+ret.ls[[i]] <- read.csv(paste0("interesting",i))
+}

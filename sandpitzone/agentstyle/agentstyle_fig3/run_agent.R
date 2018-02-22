@@ -1,0 +1,116 @@
+library(tidyverse)
+library(rwebppl)
+rm(list=ls())
+
+
+
+accumulator.df <- data.frame();
+
+for(ppnt_calcsd in seq(from=.1,to=30,length=10)){
+    print(paste("calcsd",ppnt_calcsd))
+    hm_ppnts = 1 
+                                        #ppnt_calcsd 
+    ppnt_tolerance_prob <- rep(.01,hm_ppnts) 
+    ppnt_tolerance_payoff <- rep(1.1,hm_ppnts)
+    ppnt_orderror <- 0.1
+    useord <- TRUE
+    usecalc <- TRUE
+
+    source("stim_creation.R")
+    stim.df <- data.frame();
+    set.seed(4);
+    for(i in 1:1500){
+        stim.df <- rbind(stim.df,getRandomTrial());
+    }
+
+    stim.df$payoffprior_mean <- with(stim.df,mean(c(payoffA,payoffB,payoffC)))
+    stim.df$payoffprior_sd <- with(stim.df,sd(c(payoffA,payoffB,payoffC)))
+
+    stim_both.df <- bulkAssignStim(stim.df)
+    
+    stim_ordonly.df <- bulkAssignStim(stim.df)
+    stim_ordonly.df$usecalc <- FALSE
+
+    stim_calconly.df <- bulkAssignStim(stim.df)
+    stim_calconly.df$useord <- FALSE
+
+    starttime <- Sys.time();
+    fit <- webppl(program_file="agent.ppl",data=stim_both.df,data_var="expdf")
+    stim.df$choice_both<- fit
+    endtime <- Sys.time();
+    print(paste("both",(endtime-starttime)))
+
+    starttime <- Sys.time();
+    fit <- webppl(program_file="agent.ppl",data=stim_ordonly.df,data_var="expdf")
+    stim.df$choice_ordonly <- fit
+    endtime <- Sys.time();
+    print(paste("ord",(endtime-starttime)))
+
+    starttime <- Sys.time();
+    fit <- webppl(program_file="agent.ppl",data=stim_calconly.df,data_var="expdf")
+    stim.df$choice_calconly <- fit
+    endtime <- Sys.time();
+    print(paste("calc",(endtime-starttime)))
+
+    stim.df$calcsd <- ppnt_calcsd
+    stim.df$orderror <- ppnt_orderror
+    accumulator.df <- rbind(accumulator.df,stim.df)
+}
+write.csv(accumulator.df,file="varycalcsd.csv",row.names=FALSE)
+
+accumulator.df <- data.frame();
+####################
+
+for(ppnt_orderror in seq(from=.01,to=1,length=10)){
+    print(paste("orderr",ppnt_orderror))
+    
+    hm_ppnts = 1 
+    ppnt_calcsd <- 15
+    ppnt_tolerance_prob <- rep(.01,hm_ppnts) 
+    ppnt_tolerance_payoff <- rep(1.1,hm_ppnts)
+                                        #ppnt_orderror <- 0.1
+    useord <- TRUE
+    usecalc <- TRUE
+
+    source("stim_creation.R")
+    stim.df <- data.frame();
+    set.seed(4);
+    for(i in 1:1500){
+        stim.df <- rbind(stim.df,getRandomTrial());
+    }
+
+    stim.df$payoffprior_mean <- with(stim.df,mean(c(payoffA,payoffB,payoffC)))
+    stim.df$payoffprior_sd <- with(stim.df,sd(c(payoffA,payoffB,payoffC)))
+
+    stim_both.df <- bulkAssignStim(stim.df)
+
+    stim_ordonly.df <- bulkAssignStim(stim.df)
+    stim_ordonly.df$usecalc <- FALSE
+
+    stim_calconly.df <- bulkAssignStim(stim.df)
+    stim_calconly.df$useord <- FALSE
+
+    starttime <- Sys.time();
+    fit <- webppl(program_file="agent.ppl",data=stim_both.df,data_var="expdf")
+    stim.df$choice_both<- fit
+    endtime <- Sys.time();
+    print(paste("both",(endtime-starttime)))
+
+    starttime <- Sys.time();
+    fit <- webppl(program_file="agent.ppl",data=stim_ordonly.df,data_var="expdf")
+    stim.df$choice_ordonly <- fit
+    endtime <- Sys.time();
+    print(paste("ord",(endtime-starttime)))
+
+    starttime <- Sys.time();
+    fit <- webppl(program_file="agent.ppl",data=stim_calconly.df,data_var="expdf")
+    stim.df$choice_calconly <- fit
+    endtime <- Sys.time();
+    print(paste("calc",(endtime-starttime)))
+
+    stim.df$calcsd <- ppnt_calcsd
+    stim.df$orderror <- ppnt_orderror
+    accumulator.df <- rbind(accumulator.df,stim.df)
+}
+
+write.csv(accumulator.df,file="varyorderr.csv",row.names=FALSE)
