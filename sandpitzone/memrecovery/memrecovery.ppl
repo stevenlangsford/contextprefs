@@ -1,0 +1,37 @@
+//helper functions
+var countlist = function(n){
+    var countdown = function(n){//So ugly! But if you're gonna use this as an index, it makes more sense/keeps correct correspondances in count-up order.
+	if(n<=0) return [];
+	return [n-1].concat(countdown(n-1));
+    }
+    countdown(n).reverse()
+}
+var max = function(arr){reduce(function(a,b){if(a>b)return a; else return b;},arr[0],arr)};
+var hm_ppnts = max(map(function(arow){arow["ppntid"]},expdf))+1; //ASSUMING ids start from 0. Used to construct return values from mem-d functions by walking through a countlist(hm_ppnts) of ppntids.
+
+
+//MAIN WORK, this is the model passed to Infer.
+var recover_agentparams = function(){
+    //ppnt attributes
+    //Only calcsd inferred, others are constants.
+    var getmy_calcsd = mem(function(ppntid){
+	flip(.5) ? 1 : 15 //to replace with more realistic gaussian prior?
+    })
+    
+    var getmy_tolerance_prob = mem(function(ppntid){return 0.11})
+    var getmy_tolerance_payoff = mem(function(ppntid){return 1.1})
+    var getmy_orderr = mem(function(ppntid){return .1})
+    var getmy_payoffpriormean = mem(function(ppntid){return 20})
+    var getmy_payoffpriorsd = mem(function(ppntid){return 8})
+    
+    var obsfunction = function(arow){
+	//Observe that the howes16 model decision using getmy_parameter values returns the choice in this data row.
+
+    }//end obsfunction
+    
+    map(obsfunction,expdf)
+    return map(getmy_calcsd,countlist(hm_ppnts))
+}//end recover_agentparams
+
+
+Infer({method:"SMC",particles:100,rejuvSteps:5,model:recover_agentparams}); //what impact #particles & #rejuvSteps?

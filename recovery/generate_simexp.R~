@@ -1,0 +1,14 @@
+library(tidyverse)
+library(rwebppl)
+
+stim.df <- read.csv("hilocalcsd_diagstim.csv")
+
+hm_ppnts = 2
+ppnt_calcsd <- c(5,20)
+ppnt_tolerance_prob <- rep(.01,hm_ppnts) 
+ppnt_tolerance_payoff <- rep(1.1,hm_ppnts)
+ppnt_orderror <- rep(.1,hm_ppnts)
+useord <- TRUE
+usecalc <- TRUE
+stim$payoffprior_mean = 20
+stim$payoffprior_mean = 8

@@ -1,0 +1,2 @@
+var dat = flip();
+json.write('data/test.json', dat);
