@@ -1,7 +1,7 @@
 //helper functions
 var countlist = function(n){
     var countdown = function(n){//So ugly! But if you're gonna use this as an index, it makes more sense/keeps correct correspondances in count-up order.
-	if(n<=0) return [];
+	if(n<=0) return [				];
 	return [n-1].concat(countdown(n-1));
     }
     countdown(n).reverse()
@@ -116,13 +116,14 @@ var recover_agentparams = function(){
 		sim_vB:arow["payoffB"],
 		sim_vC:arow["payoffC"],
 		sim_ppntid:arow["ppntid"],
-		est_calcsd:getmy_calcsd(arow["ppntid"])
+		est_calcsd:getmy_calcsd(arow["ppntid"]),
+		est_returnchoice:A>B&&A>C ? 1 : B>A&&B>C ? 2 : 3
 	    });
 	    //end diag
 	    return A>B&&A>C ? 1 : B>A&&B>C ? 2 : 3;
 	}
 	
-	return Infer({method:'SMC',particles:500,model:agent});
+	return Infer({method:'MCMC',samples:500,burn:20,model:agent});
     }
     
     var obsfunction = function(arow){
@@ -133,6 +134,7 @@ var recover_agentparams = function(){
 	    score1:my_agent.score(1),
 	    score2:my_agent.score(2),
 	    score3:my_agent.score(3),
+	    //asobj:my_agent,
 	    pA:arow["pA"],
 	    pB:arow["pB"],
 	    pC:arow["pC"],
