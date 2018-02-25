@@ -5,6 +5,8 @@ rm(list=ls())
 simexp.df <- read.csv(file="simexp.csv")%>%select(ppntid,calc_sd,probA,probB,probC,payoffA,payoffB,payoffC,choice) #simulated experiment data with some simulated participant responses
 hm_ppnts <- max(simexp.df$ppntid)+1 #ugh
 
+simexp.df$row.name <- 1:nrow(simexp.df);#maybe use this in some diag checking then quietly delete it?
+
 starttime=Sys.time()
 recovery.fit <- webppl(program_file="memrecovery.ppl",data=simexp.df,data_var="expdf",packages=c("webppl-json"))
 
