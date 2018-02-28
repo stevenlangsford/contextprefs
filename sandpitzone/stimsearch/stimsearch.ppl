@@ -7,10 +7,10 @@ var getProbDist=function(){return Beta({a:1,b:1})}
 var getPayoffDist=function(){return Gaussian({mu:19,sigma:8})}
 
 //agent params: todo, pass as df, allow more than two agents?
-var ppnt_calcsd = [3,10];
-var ppnt_tolerance_prob=[.011,.011];
+var ppnt_calcsd = [15,15]; //calc not very informative, encourage reliance on ord //[3,10]; //calc are different
+var ppnt_tolerance_prob=[.011,.011];//unchanged
 var ppnt_tolerance_payoff=[1.1,1.1];
-var ppnt_perr=[0.1,0.1];
+var ppnt_perr=[.1,.55];//very different ord error //[0.1,0.1];
 
 //main worker function:
 var searcher = function(){

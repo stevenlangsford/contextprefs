@@ -2,84 +2,82 @@ library(tidyverse)
 library(rwebppl)
 rm(list=ls())
 
-for(hm_trials in seq(from=5,to=50,by=5)){
-    runstring <- paste0(hm_trials,"trials")
-    print(runstring)
-    set.seed(4)
-    ##exp setup
-                                        #hm_trials = 2;
-    hm_ppnts = 2;
-
-    ##population setup
-    pop_A <- rnorm(1,10,2) #mean value of 'A' weight in the population
-    pop_B <- rnorm(1,10,5) #mean value of 'B' weight in the population
-    pop_sdA <- runif(1,.5,10) #some populations are tight, some are spread.
-    pop_sdB <- runif(1,.5,10) #No reason the spread has to be the same on each attribute, people agree about some things disagree about others.
-    pop_noisemean <- abs(rnorm(1,1,1))+0.5 #participants are noisy.
-    pop_noisesd <- abs(rnorm(1,1,1))+0.5
-    ##Draw ppnts from this population
-    ppnt_A <- rep(1,hm_ppnts)##rnorm(hm_ppnts,pop_A,pop_sdA)
-    ppnt_B <- rep(2,hm_ppnts)##rnorm(hm_ppnts,pop_B,pop_sdB)
-    ppnt_noise <- abs(rnorm(hm_ppnts,pop_noisemean,pop_noisesd))
-
-    ##Distribution of stim attributes
-    stim_Adist <- function(){runif(1,0,50)}
-    stim_Bdist <- function(){runif(1,0,50)}
-
-    ##create stim
-    stim.df <- data.frame();
-    for(atrial in 1:hm_trials){
-        stim.df <- rbind(stim.df,
-                         data.frame(
-                             A1=stim_Adist(),B1=stim_Bdist(),
-                             A2=stim_Adist(),B2=stim_Bdist(),
-                             A3=stim_Adist(),B3=stim_Bdist()
-                         )
-                         )
-    }
-
-    ##assign stim to ppnts
-    exp.df <- data.frame()
-    for(appnt in 1:hm_ppnts){
-        for(atrial in 1:nrow(stim.df)){
-            exp.df <- rbind(exp.df,cbind(stim.df[atrial,],data.frame(ppntid = appnt,trialid = atrial,sim.Aweight=ppnt_A[appnt],sim.Bweight=ppnt_B[appnt],sim.noise=ppnt_noise[appnt])))
-        }
-    }
-
-    ##Simulate participant choices (lm version)
-    simchoice.lm <- function(arow){
-        eval.lm <- function(a,b,aweight,bweight,noise){
-            return(a*aweight+b*bweight+rnorm(1,0,as.numeric(noise)))
-        }
-        opt1 <- eval.lm(arow["A1"],arow["B1"],arow["sim.Aweight"],arow["sim.Bweight"],arow["sim.noise"])%>%as.numeric
-        opt2 <- eval.lm(arow["A2"],arow["B2"],arow["sim.Aweight"],arow["sim.Bweight"],arow["sim.noise"])%>%as.numeric
-        opt3 <- eval.lm(arow["A3"],arow["B3"],arow["sim.Aweight"],arow["sim.Bweight"],arow["sim.noise"])%>%as.numeric
-        return(which(c(opt1,opt2,opt3)==max(c(opt1,opt2,opt3))))
-    }
-
-    for(i in 1:nrow(exp.df)){
-        exp.df[i,"simchoice"]=simchoice.lm(exp.df[i,])
-    }
-
-    starttime <- Sys.time()
-    fit <- webppl(program_file="howesAB.ppl",data=exp.df,data_var="expdf")
-    endtime <- Sys.time()
-    runtime <- endtime-starttime
-    save(fit,file=paste0("data/fit",runstring,".RData"))
-    write.csv(data.frame(ppnts=hm_ppnts,trials=hm_trials,runtime=runtime),file=paste0("data/",runstring,"time.csv"));
-    
-    A.recovered <- as.numeric(map(fit[[1]],function(x){x[1]}))
-    B.recovered <- as.numeric(map(fit[[1]],function(x){x[2]}))
-    funfacts.df <- data.frame(meanA=mean(A.recovered),meanB=mean(B.recovered))
-    
-    plot.df <- data.frame(Asample=A.recovered,Bsample=B.recovered)
-    ggsave(
-        ggplot(plot.df,aes(alpha=.5))+
-        geom_histogram(aes(x=Asample,fill="A"),binwidth=.01)+
-        geom_histogram(aes(x=Bsample,fill="B"),binwidth=.01)+
-        geom_vline(data=funfacts.df,aes(xintercept=meanA,color="A",size=2,alpha=.5))+
-        geom_vline(data=funfacts.df,aes(xintercept=meanB,color="B",size=2,alpha=.5))+
-        xlim(c(-1,3.5))+
-        theme_bw()+ggtitle(runstring),
-           file=paste0("data/",runstring,".png"))
+##world params
+getA <- function(){
+    return(runif(1,0,10))#world distribution of attribute A
 }
+
+getB <- function(){
+    return(runif(1,0,15))#world distribution of attribute B
+}
+getcalcsd <- function(){
+    return(2); ##? reasonable?
+}
+##exp params
+hm_ppnts <- 2
+hm_trials <- 20
+
+##set up the stimuli:
+trials.df <- data.frame(attributeA_option1=c(),
+                        attributeA_option2=c(),
+                        attributeA_option3=c(),
+                        attributeB_option1=c(),
+                        attributeB_option2=c(),
+                        attributeB_option3=c())
+
+for(atrial in 1:hm_trials){
+    trials.df <- rbind(trials.df,
+                       data.frame(attributeA_option1=getA(),
+                                  attributeA_option2=getA(),
+                                  attributeA_option3=getA(),
+                                  attributeB_option1=getB(),
+                                  attributeB_option2=getB(),
+                                  attributeB_option3=getB()
+                                  ))
+}
+
+##set up the participants
+set.seed(4)
+ppnt_Aweight <- rnorm(hm_ppnts,0,1)
+ppnt_Bweight <- rnorm(hm_ppnts,0,1)
+ppnt_calcsd <-  c(1,5)#replicate(hm_ppnts,getcalcsd())
+ppnt_toleranceA <- rep(3,hm_ppnts)
+ppnt_toleranceB <- rep(3,hm_ppnts)
+ppnt_orderr <- rep(.1,hm_ppnts)
+
+assignStim <- function(arow){
+    thisrow <- data.frame()
+    
+    for(ppnt in 1:hm_ppnts){
+        thisrow <- rbind(thisrow,cbind(arow,data.frame(ppntid=ppnt,
+                                                  Aweight=ppnt_Aweight[ppnt],
+                                                  Bweight=ppnt_Bweight[ppnt],
+                                                  toleranceA=ppnt_toleranceA[ppnt],
+                                                  toleranceB=ppnt_toleranceB[ppnt],
+                                                  calcsd=ppnt_calcsd[ppnt],
+                                                  orderr=ppnt_orderr[ppnt],
+                                                  value1=ppnt_Aweight[ppnt]*arow[,"attributeA_option1"]+ppnt_Bweight[ppnt]*arow[,"attributeB_option1"],
+                                                  value2=ppnt_Aweight[ppnt]*arow[,"attributeA_option2"]+ppnt_Bweight[ppnt]*arow[,"attributeB_option2"],
+                                                  value3=ppnt_Aweight[ppnt]*arow[,"attributeA_option3"]+ppnt_Bweight[ppnt]*arow[,"attributeB_option3"]
+                                                  )))
+    }
+    return(thisrow);
+}
+bulkAssignStim <- function(my.df){
+    exp.df <- data.frame()
+    for(arow in 1:nrow(my.df)){
+        exp.df <- rbind(exp.df,assignStim(my.df[arow,]))
+    }
+    return(exp.df)
+}
+simexp.df <- bulkAssignStim(trials.df)
+
+##webppl(program_file="memrecovery.ppl",data=simexp.df,data_var="expdf",packages=c("webppl-json"))
+simexp.df$choice <- webppl(program_file="ABchoices.ppl",data=simexp.df,data_var="expdf",packages=c("webppl-json"))
+
+for(arow in 1:nrow(simexp.df)){
+    simexp.df[arow,"oraclechoice"]=which(simexp.df[arow,c("value1","value2","value3")]==max(simexp.df[arow,c("value1","value2","value3")]))
+}
+
+
+table(simexp.df$ppntid,simexp.df$choice==simexp.df$oraclechoice)

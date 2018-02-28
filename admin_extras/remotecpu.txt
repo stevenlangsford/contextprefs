@@ -1,10 +1,10 @@
 ssh slangsfo@mac-rickl05.psych.lsa.umich.edu
 
 putting files with scp
-scp targfiles slangsfo@mac-rickl05.psych.lsa.umich.edu:TARGPATH
+scp -r targfiles slangsfo@mac-rickl05.psych.lsa.umich.edu:TARGPATH
 
 getting files with scp
-scp slangsfo@mac-rickl05.psych.lsa.umich.edu:TARGPATH LOCALPATH
+scp -r slangsfo@mac-rickl05.psych.lsa.umich.edu:TARGPATH LOCALPATH
 
 #eg
 scp -r slangsfo@mac-rickl05.psych.lsa.umich.edu:workspace/ gotit
