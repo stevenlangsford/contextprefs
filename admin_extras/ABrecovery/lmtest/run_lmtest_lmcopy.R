@@ -1,0 +1,53 @@
+library(tidyverse)
+library(rwebppl)
+rm(list=ls())
+
+##simexp.df <- read.csv("ABsimexp_howeschoices.csv")
+##simexp.df <- read.csv("ABsimexp_howeschoices_80ea.csv")
+simexp.df <- read.csv("ABsimexp_lmchoices_manyppnts.csv")
+
+hm_ppnts <- max(simexp.df$ppntid)+1 #same start-from-zero assumption as baked into ppl.
+
+## multirep.df <- data.frame();
+## for(arep in 1:1){
+    
+timer <- system.time(
+{fit <<- webppl(program_file="lmtest.ppl",data=simexp.df,data_var="expdf")}
+)
+
+mysamples.df <- data.frame()
+for(asample in fit[[1]]){
+    for(appnt in 1:hm_ppnts){
+        mysamples.df <- rbind(mysamples.df,data.frame(ppntid=appnt-1,Aweight=asample[appnt,2],Bweight=asample[appnt,3]))
+    }
+}
+
+expfacts.df <- simexp.df%>%group_by(ppntid)%>%summarize(Aweight=mean(Aweight),Bweight=mean(Bweight))%>%ungroup() #mean==max==uniquevalue
+ppntfacts.df <- mysamples.df%>%group_by(ppntid)%>%summarize(Aweight=mean(Aweight),Bweight=mean(Bweight))%>%ungroup() #mean==max==uniquevalue
+
+#ppntfacts.df$rep <- arep;
+## multirep.df <- rbind(multirep.df,ppntfacts.df)
+## print(arep)
+#}##end multirep
+
+#mrepfacts.df <- multirep.df%>%group_by(ppntid)%>%summarize(Aweight=mean(Aweight),Bweight=mean(Bweight))%>%ungroup()
+
+recovery.plot <- ggplot(mysamples.df)+
+    geom_histogram(aes(x=Aweight,fill="A"),alpha=.5)+
+    geom_histogram(aes(x=Bweight,fill="B"),alpha=.5)+
+
+    geom_vline(data=expfacts.df,aes(xintercept=Aweight,color="A",linetype="actual"),size=2)+
+    geom_vline(data=expfacts.df,aes(xintercept=Bweight,color="B",linetype="actual"),size=2)+
+
+   ##  geom_vline(data=mrepfacts.df,aes(xintercept=Aweight,color="A",linetype="recovered"),size=2.5)+
+   ## geom_vline(data=mrepfacts.df,aes(xintercept=Bweight,color="B",linetype="recovered"),size=2.5)+
+
+    geom_vline(data=ppntfacts.df,aes(xintercept=Aweight,color="A",linetype="recovered"),size=2)+
+    geom_vline(data=ppntfacts.df,aes(xintercept=Bweight,color="B",linetype="recovered"),size=2)+
+
+    facet_wrap(~ppntid)+
+    theme_bw()
+    
+save.image(file="runlmtest_recoverlmmanyppnts.RData")
+ggsave(recovery.plot,file="lm_recovering_lm_manyppnts.png")
+# print(recovery.plot)

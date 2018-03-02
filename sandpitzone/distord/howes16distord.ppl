@@ -1,0 +1,148 @@
+//Gives a list of simulated participant choices to add to a simulated exp.df
+//each row of the passed df should give stim properties and agent setup params for that choice.
+
+//helper functions
+//finds hm_ppnts from ppntid, **assumed to be consecutive ints starting at 0**
+var max = function(arr){reduce(function(a,b){if(a>b)return a; else return b;},arr[0],arr)};
+
+//alternative to looping over rows, use map over a countlist(arr.length) index
+var countlist = function(n){
+    var countdown = function(n){//So ugly! But if you're gonna use this as an index, it makes more sense/keeps correct correspondances in count-up order.
+	if(n<=0) return [];
+	return [n-1].concat(countdown(n-1));
+    }
+    countdown(n).reverse()
+}
+//get the data.df in more convenient lists:
+var ppntid = map(function(arow){arow["ppntid"]},expdf)
+var probA = map(function(arow){arow["probA"]},expdf)
+var probB = map(function(arow){arow["probB"]},expdf)
+var probC = map(function(arow){arow["probC"]},expdf)
+var payoffA = map(function(arow){arow["payoffA"]},expdf)
+var payoffB = map(function(arow){arow["payoffB"]},expdf)
+var payoffC = map(function(arow){arow["payoffC"]},expdf)
+//extra agent param setting for choice creation:
+var ppnt_calcsd = map(function(arow){arow["calc_sd"]},expdf)
+var ppnt_tolerance_prob  = map(function(arow){arow["tolerance_prob"]},expdf)
+var ppnt_tolerance_payoff = map(function(arow){arow["tolerance_payoff"]},expdf)
+var ppnt_orderror = map(function(arow){arow["p_err"]},expdf)
+//model setup, switch observation types on and off, set appropriate payoff priors. Can delete all these eventually.
+var useord = map(function(arow){arow["useord"]},expdf)
+var usecalc = map(function(arow){arow["usecalc"]},expdf)
+var payoffprior_mean = map(function(arow){arow["payoffprior_mean"]},expdf)
+var payoffprior_sd = map(function(arow){arow["payoffprior_sd"]},expdf)
+var trial_id = map(function(arow){arow["trial_id"]},expdf)
+var row_id = map(function(arow){arow["row_id"]},expdf)
+
+//derived setup params-of-interest
+var hm_ppnts = max(map(function(arow){arow["ppntid"]},expdf))+1;//+1 because id's start from 0. Basically countlist(hm_ppnts) must give indexes into an array that is hm_ppnts long. Starting from 0 in exp.df and adding one here does this. https://xkcd.com/163/
+var hm_trials = expdf.length;
+
+var trial_calcobs = map(function(i){
+    var calcobs_arr =
+	[probA[i]*payoffA[i]+gaussian({mu:0,sigma:ppnt_calcsd[i]}),
+	 probB[i]*payoffB[i]+gaussian({mu:0,sigma:ppnt_calcsd[i]}),
+	 probC[i]*payoffC[i]+gaussian({mu:0,sigma:ppnt_calcsd[i]})
+	];
+    return calcobs_arr;
+},countlist(hm_trials))
+
+//ordinal observations for individual rows i
+var ordrelation = function(a,b,tolerance,orderr){//these args are individual values...
+    // if(flip(orderr)) return categorical({vs:["<","=",">"],ps:[1,1,1]});
+    // if(Math.abs(a-b)<tolerance) return "=";
+    // if(a>b) return ">";
+    // if(a<b) return "<";
+    var errprob = orderr/3; //probability due each option under uniform error
+    var targprob = 1-2*errprob; //prob 1, minus prob error, plus one slice back again for lucky accidents.
+    if(Math.abs(a-b)<tolerance) return Categorical({vs:["<","=",">"],ps:[errprob,targprob,errprob]});
+    if(a<b) return Categorical({vs:["<","=",">"],ps:[targprob,errprob,errprob]});
+    if(a>b) return Categorical({vs:["<","=",">"],ps:[errprob,errprob,targprob]});
+}
+//convenient helper to get ord observations for every trial
+var ordrelation_list = function(a,b,tolerance){
+    map(function(i){sample(ordrelation(a[i],b[i],tolerance[i],ppnt_orderror[i]))},
+	countlist(hm_trials))
+}
+//ord observations for each trial
+var ord_ABprob = ordrelation_list(probA,probB,ppnt_tolerance_prob);
+var ord_ACprob = ordrelation_list(probA,probC,ppnt_tolerance_prob);
+var ord_BCprob = ordrelation_list(probB,probC,ppnt_tolerance_prob);
+var ord_ABpayoff = ordrelation_list(payoffA,payoffB,ppnt_tolerance_payoff);
+var ord_ACpayoff = ordrelation_list(payoffA,payoffC,ppnt_tolerance_payoff);
+var ord_BCpayoff = ordrelation_list(payoffB,payoffC,ppnt_tolerance_payoff);
+
+var agentMaker = function(i){
+    return function(){	
+	//priors on the distribution of attributes: these don't change with experience. I guess they could, for some cost in complexity.
+	var agent_probs = repeat(3,function(){sample(Beta({a:1,b:1}))});
+	var agent_payoffs = repeat(3,function(){sample(
+	    	    Gaussian({mu:payoffprior_mean[i],sigma:payoffprior_sd[i]})
+	)});
+	//agent is aware of the process that generated the observations, including own noise levels.  
+
+	//observe the calculation observations: calcobs is known to be prob*payoff+noise, calcobs is known, noise is known, prob and payoff are inferred.
+	if(usecalc[i]){
+	observe(Gaussian({mu:agent_probs[0]*agent_payoffs[0],sigma:ppnt_calcsd[i]}),trial_calcobs[i][0])
+	observe(Gaussian({mu:agent_probs[1]*agent_payoffs[1],sigma:ppnt_calcsd[i]}),trial_calcobs[i][1])
+	observe(Gaussian({mu:agent_probs[2]*agent_payoffs[2],sigma:ppnt_calcsd[i]}),trial_calcobs[i][2])
+	}
+	if(useord[i]){
+	//similarly, agent knows exactly how ordrelation works, needs its prob and payoffs to produce ord relations consistent with the observed ones.
+	observe(ordrelation(agent_probs[0],agent_probs[1],ppnt_tolerance_prob[i],ppnt_orderror[i]),ord_ABprob[i]);
+	observe(ordrelation(agent_probs[0],agent_probs[2],ppnt_tolerance_prob[i],ppnt_orderror[i]),ord_ACprob[i]);
+	observe(ordrelation(agent_probs[1],agent_probs[2],ppnt_tolerance_prob[i],ppnt_orderror[i]),ord_BCprob[i]);
+	observe(ordrelation(agent_payoffs[0],agent_payoffs[1],ppnt_tolerance_payoff[i],ppnt_orderror[i]),ord_ABpayoff[i]);
+	observe(ordrelation(agent_payoffs[0],agent_payoffs[2],ppnt_tolerance_payoff[i],ppnt_orderror[i]),ord_ACpayoff[i]);
+	observe(ordrelation(agent_payoffs[1],agent_payoffs[2],ppnt_tolerance_payoff[i],ppnt_orderror[i]),ord_BCpayoff[i]);
+	}
+	
+	//expected value of each option. (could just return this, [A,B,C], maybe advantages to that, but it involves another random 'sample' step to extract choices)
+	var A = agent_probs[0]*agent_payoffs[0];
+	var B = agent_probs[1]*agent_payoffs[1];
+	var C = agent_probs[2]*agent_payoffs[2];
+
+	var expectation = [A,B,C];
+	return expectation;
+	//choice-return option.
+	// if(A>B&&A>C)return 1;
+	// if(B>A&&B>C)return 2;
+	// if(C>A&&C>B)return 3;
+	// console.log("Agent washout");//should never happen?
+    }//end agent's model
+}//end agent-maker, which points the agent model at row i of exp.df data
+
+
+var choicerule = function(i){
+    var agent = Infer({method:"MCMC",samples:5000,lag:0,burn:1000,model:agentMaker(i)}); 
+
+    //alternative if agent returns array of expected values [p1*v1,p2*v2,p3*v3]
+    var utilityPosteriors = repeat(18000,function(){sample(agent)});
+    //Take the highest average return
+    var A = Math.sum(map(function(x){x[0]},utilityPosteriors))/utilityPosteriors.length;
+    var B = Math.sum(map(function(x){x[1]},utilityPosteriors))/utilityPosteriors.length;
+    var C = Math.sum(map(function(x){x[2]},utilityPosteriors))/utilityPosteriors.length;
+
+    //choice-return option
+    // var A = Math.exp(agent.score(1))
+    // var B = Math.exp(agent.score(2))
+    // var C = Math.exp(agent.score(3))
+    
+
+    // json.write("trialimpressions/"+trial_id[i]+'row'+row_id[i]+'_Adistribution.json', map(function(x){x[0]},utilityPosteriors));
+    // json.write("trialimpressions/"+trial_id[i]+'row'+row_id[i]+'_Bdistribution.json', map(function(x){x[1]},utilityPosteriors));
+    // json.write("trialimpressions/"+trial_id[i]+'row'+row_id[i]+'_Cdistribution.json', map(function(x){x[2]},utilityPosteriors));
+    
+    if(A>B&&A>C)return 1;
+    if(B>A&&B>C)return 2;
+    if(C>A&&C>B)return 3;
+    console.log("GOT A TIED CHOICE");//This should be insanely rare, bad news if it ever actually appears, look out for this?
+    error_choicerule_washout //Not defined, the error if encountered shows this name, only way I know to throw an error with an informative message from webppl. Ugh.
+//    return choicerule(i); //Alternative tiebreaker: try again! What are the odds of getting a second tie?
+}
+
+var choices =  map(choicerule,countlist(hm_trials))
+
+// //return value. Impressions included for diag inspection.
+var ret =[trial_calcobs,ord_ABprob,ord_ACprob,ord_BCprob,ord_ABpayoff,ord_ACpayoff,ord_BCpayoff,choices];
+ret;

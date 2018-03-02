@@ -1,4 +1,0 @@
-library(tidyverse)
-library(jsonlite)
-folder <- "problogs"
-agents <- paste0(folder,gre)

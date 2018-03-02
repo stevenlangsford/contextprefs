@@ -10,31 +10,31 @@ var max = function(arr){reduce(function(a,b){if(a>b)return a; else return b;},ar
 var hm_ppnts = max(map(function(arow){arow["ppntid"]},expdf))+1; //ASSUMING ids start from 0. Used to construct return values from mem-d functions by walking through a countlist of ppntids.
 
 var writelogs = false;
-var logprob = .1;
+var logprob = .01;
 //if(writelogs&&flip(logprob))json.write('attributeAlogs/test'+randomInteger(1000)+'.json', {writelogs:writelogs,logprob:logprob});
 
-var decision_distribution = function(arow){
+var recover_agentparams = function(){
 
-    //mimic recover, where these are mem functions that pull down a value from a prior. Here, they pull down simulation truth: rest of the code untouched.
     var  getmy_attributeAweight = mem(function(id){
-	return arow["Aweight"];
+	return gaussian({mu:0,sigma:1})
     })
     var  getmy_attributeBweight = mem(function(id){
-	return arow["Bweight"];
+	return gaussian({mu:0,sigma:1})
     })
     var getmy_calcsd = mem(function(id){
-	return arow["calcsd"];
+	return 4;
     })
     var getmy_tolerance_attributeA = mem(function(id){
-	return arow["toleranceA"];
+	return 3;
     })
     var getmy_tolerance_attributeB= mem(function(id){
-	return arow["toleranceB"];
+	return 3;
     })
     var getmy_orderr = mem(function(id){
-	return arow["orderr"];
+	return .1;
     })
-    
+
+var decision_distribution = function(arow){    
 	var calc1 = gaussian({mu:arow["attributeA_option1"]*getmy_attributeAweight(arow["ppntid"])+arow["attributeB_option1"]*getmy_attributeBweight(arow["ppntid"]),
 			      sigma:getmy_calcsd(arow["ppntid"])});
 	var calc2 = gaussian({mu:arow["attributeA_option2"]*getmy_attributeAweight(arow["ppntid"])+arow["attributeB_option2"]*getmy_attributeBweight(arow["ppntid"]),
@@ -84,42 +84,53 @@ var decision_distribution = function(arow){
 	    var opt2 = my_A2*getmy_attributeAweight(arow["ppntid"])+ my_B2*getmy_attributeBweight(arow["ppntid"])
 	    var opt3 = my_A3*getmy_attributeAweight(arow["ppntid"])+ my_B3*getmy_attributeBweight(arow["ppntid"])
 
-	    return opt1>opt2&&opt1>opt3 ? 1 : opt2>opt1&&opt2>opt3 ? 2 : 3;
-	}
-
-    var myAgent = Infer({method:'MCMC',samples:500,burn:20,model:agent});
-    
-    	if(writelogs&&flip(logprob)){ //diag
-	    json.write('logs/agentlog'+randomInteger(10000)+'.json', {
-		A1:arow["attributeA_option1"],
-		A2:arow["attributeA_option2"],
-		A3:arow["attributeA_option3"],
-		B1:arow["attributeB_option1"],
-		B2:arow["attributeB_option2"],
-		B3:arow["attributeB_option3"],
+	    if(writelogs&&flip(logprob))json.write('recovery_logs/test'+randomInteger(9999)+'.json', {
+		ppntid:arow["ppntid"],
+		Aweight:getmy_attributeAweight(arow["ppntid"]),
+		Bweight:getmy_attributeBweight(arow["ppntid"]),
 		calc1:calc1,
 		calc2:calc2,
-		calc3:calc3,
-		ordA_12:ordA_12,
-		ordA_13:ordA_13,
-		ordA_23:ordA_23,
-		ordB_12:ordB_12,
-		ordB_13:ordB_13,
-		ordB_23:ordB_23,
-		ppntid:arow["ppntid"],
-		calcsd:arow["calcsd"],
-		Aweight:arow["Aweight"],
-		Bweight:arow["Bweight"],
-		tolA:arow["toleranceA"],
-		tolB:arow["toleranceB"],
-		score1:Math.exp(myAgent.score(1)),
-		score2:Math.exp(myAgent.score(2)),
-		score3:Math.exp(myAgent.score(3))
+		calc3,calc3,
+		ordA12:ordA_12,
+		ordA13:ordA_13,
+		ordA23:ordA_23,
+		ordB12:ordB_12,
+		ordB13:ordB_13,
+		ordB23:ordB_23,
+		mychoice:(opt1>opt2&&opt1>opt3 ? 1 : opt2>opt1&&opt2>opt3 ? 2 : 3),
+		myA1:my_A1,
+		myA2:my_A2,
+		myA3:my_A3,
+		myB1:my_B1,
+		myB2:my_B2,
+		myB3:my_B3,
+		simA1:arow["attributeA_option1"],
+		simA2:arow["attributeA_option2"],
+		simA3:arow["attributeA_option3"],
+		simB1:arow["attributeB_option1"],
+		simB2:arow["attributeB_option2"],
+		simB3:arow["attributeB_option3"],
 	    });
-	   }//end diag
-    return myAgent;	
+	    
+	    return opt1>opt2&&opt1>opt3 ? 1 : opt2>opt1&&opt2>opt3 ? 2 : 3;
+	}
+    return Infer({method:'MCMC',samples:500,burn:20,model:agent});	
 }
 
-var choices = map(function(x){sample(decision_distribution(x))},expdf);
+    var obsfunction = function(arow){
+	observe(decision_distribution(arow), arow["choice"]);
+    }//end obsfunction
 
-choices
+    map(obsfunction,expdf)
+
+
+        var ret = [map(getmy_attributeAweight,countlist(hm_ppnts)),
+		   map(getmy_attributeBweight,countlist(hm_ppnts))
+		   ]
+    return ret;
+    
+    //more efficient to do this? vs risk of confusion with R reader switching formats between AB and prob-payoff versions?
+    // return map(function(x){return [getmy_attributeAweight(x),getmy_attributeBweight(x)]},countlist(hm_ppnts));
+}
+
+Infer({method:"MCMC",samples:1000,burn:50,lag:2,model:recover_agentparams}); //what impact #particles & #rejuvSteps?
