@@ -2,7 +2,6 @@ library(tidyverse)
 library(rwebppl)
 
 simexp.df <- read.csv(file="ABsimexp_withchoices.csv")%>%select(contains("attribute"),ppntid,Aweight,Bweight,contains("value"),contains("choice"))
-
 hm_ppnts <- max(simexp.df$ppntid)+1
 
 starttime <- Sys.time()
@@ -26,13 +25,3 @@ for(asample in 1:length(fit.samples)){
 
 save.image(file="runrecoverytest_complete.RData")
 
-funfacts.df <- simexp.df%>%group_by(ppntid)%>%summarize(Aweight=mean(Aweight),Bweight=mean(Bweight))%>%ungroup()#lazyhack, mean==max==min==unique_value for now.
-                                                  
-ppntAB.plot <- ggplot(mysamples.df)+geom_histogram(aes(x=Aweight,fill="A"),alpha=.5)+
-    geom_histogram(aes(x=Bweight,fill="B"),alpha=.5)+
-    facet_wrap(~ppntid)+
-    geom_vline(data=funfacts.df,aes(xintercept=Aweight,color="A"),size=2)+
-    geom_vline(data=funfacts.df,aes(xintercept=Bweight,color="B"),size=2)+
-    theme_bw()
-
-ggsave(ppntAB.plot,file="ABrecovery.png")

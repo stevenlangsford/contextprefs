@@ -1,0 +1,13 @@
+library(tidyverse)
+library(rwebppl)
+rm(list=ls())
+
+search.fit <- webppl(program_file="stimsearch.ppl")
+names(mysamples.df) <- c("A_opt1","A_opt2","A_opt3","B_opt1","B_opt2","B_opt3","score")
+
+mysamples.df <- data.frame();
+
+for( i in 1:nrow(search.fit)){
+    mysamples[i,1:6] <- search.fit[[1]][i]
+    mysamples[i,7] <- search.fit[[2]][i]
+    }

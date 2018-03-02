@@ -34,4 +34,4 @@ ppntAB.plot <- ggplot(mysamples.df)+geom_histogram(aes(x=Aweight,fill="A"),alpha
     geom_vline(data=funfacts.df,aes(xintercept=Bweight,color="B"),size=2)+
     theme_bw()
 
-ggsave(ppntAB.plot,file="ABrecovery.png")
+ggsave(ppntAB.plot)

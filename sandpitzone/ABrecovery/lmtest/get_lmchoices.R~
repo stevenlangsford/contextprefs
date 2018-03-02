@@ -14,8 +14,8 @@ getcalcsd <- function(){
     return(2); ##? reasonable?
 }
 ##exp params
-hm_ppnts <- 2
-hm_trials <- 20
+hm_ppnts <- 40
+hm_trials <- 35
 
 ##set up the stimuli:
 trials.df <- data.frame(attributeA_option1=c(),
@@ -73,11 +73,14 @@ bulkAssignStim <- function(my.df){
 simexp.df <- bulkAssignStim(trials.df)
 
 ##webppl(program_file="memrecovery.ppl",data=simexp.df,data_var="expdf",packages=c("webppl-json"))
-simexp.df$choice <- webppl(program_file="ABchoices.ppl",data=simexp.df,data_var="expdf",packages=c("webppl-json"))
+simexp.df$choice <- webppl(program_file="lm_getchoices.ppl",data=simexp.df,data_var="expdf",packages=c("webppl-json"))
+
+
 
 for(arow in 1:nrow(simexp.df)){
     simexp.df[arow,"oraclechoice"]=which(simexp.df[arow,c("value1","value2","value3")]==max(simexp.df[arow,c("value1","value2","value3")]))
 }
 
 
-write.csv(simexp.df,file="ABsimexp_withchoices.csv")
+write.csv(simexp.df,file="ABsimexp_lmchoices_manyppnts.csv")
+

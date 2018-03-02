@@ -1,0 +1,163 @@
+var getAsearchspace = function(){return Uniform({a:0,b:20})}
+var getBsearchspace = function(){return Uniform({a:0,b:20})}
+
+var agentAprior = getAsearchspace(); //priors match world, for now.
+var agentBprior = getBsearchspace();
+
+//agent params: common set used by both decision-making processes
+var get_calcnoise = mem(function(ppntid){return 4}); //mem draw because one day there might be multiple participants.
+
+var searcher = function(){
+    //ppntid is a placeholder here: the two decision makers always use the same weights as each other, so this is redundant. Just here to keep meaninglessly close consistancy with other versions of this code elsewhere.
+    var get_Aweight = mem(function(ppntid){return gaussian({mu:0,sigma:1})});
+    var get_Bweight = mem(function(ppntid){return gaussian({mu:0,sigma:1})});
+
+    var A_opt1 = sample(getAsearchspace());
+    var A_opt2 = sample(getAsearchspace());
+    var A_opt3 = sample(getAsearchspace());
+
+    var B_opt1 = sample(getBsearchspace());
+    var B_opt2 = sample(getBsearchspace());
+    var B_opt3 = sample(getBsearchspace());
+
+    //linear model:
+    var linear_decisiondist = function(arow){
+    	var Aweight = function(ppntid){return arow["Aweight"]}//crazy way to access arow, but preserves recovery code, where these are mem-draws (outside eval).
+    	var Bweight = function(ppntid){return arow["Bweight"]}
+    	var getnoise =function(ppntid){return 4}
+
+	
+    	var optionlist = [Aweight(arow["ppntid"])*arow["attributeA_option1"]+
+    			  Bweight(arow["ppntid"])*arow["attributeB_option1"]+
+    			  gaussian({mu:0,sigma:getnoise(arow["ppntid"])}), //The noise distribution gives the model flavor. This is probit, which is fine, but don't confuse it with logistic, which swaps in EV-1 here.
+			  
+    			  Aweight(arow["ppntid"])*arow["attributeA_option2"]+
+    			  Bweight(arow["ppntid"])*arow["attributeB_option2"]+
+    			  gaussian({mu:0,sigma:getnoise(arow["ppntid"])}),
+			  
+    			  Aweight(arow["ppntid"])*arow["attributeA_option3"]+
+    			  Bweight(arow["ppntid"])*arow["attributeB_option3"]+
+    			  gaussian({mu:0,sigma:getnoise(arow["ppntid"])})
+    			 ]
+    	var option_sum = reduce(function(a,b){a+b},0,map(function(x){Math.exp(x)},optionlist))
+    	var option_prob = map(function(x){Math.exp(x)/option_sum},optionlist)
+
+    	return Categorical({vs:[1,2,3],ps:option_prob}) //softmax decision maker
+    }//end linear decision maker
+    
+//    start howesmodel:
+    var howes_decisiondist = function(arow){ //returns a distribution: result of Infer, giving probability of chosing each option. Expects arow to be an object with values [Aweight, Bweight, calcsd,toleranceA,toleranceB,orderr, attibute{A,B}_option{1,2,3},ppntid]
+	
+    	//mimic recover, where these are mem functions that pull down a value from a prior. Here, they pull down simulation truth: rest of the code untouched.
+    	var  getmy_attributeAweight = mem(function(id){
+    	    return arow["Aweight"];
+    	})
+    	var  getmy_attributeBweight = mem(function(id){
+    	    return arow["Bweight"];
+    	})
+    	var getmy_calcsd = mem(function(id){
+    	    return arow["calcsd"];
+    	})
+    	var getmy_tolerance_attributeA = mem(function(id){
+    	    return arow["toleranceA"];
+    	})
+    	var getmy_tolerance_attributeB= mem(function(id){
+    	    return arow["toleranceB"];
+    	})
+    	var getmy_orderr = mem(function(id){
+    	    return arow["orderr"];
+    	})
+	
+    	var calc1 = gaussian({mu:arow["attributeA_option1"]*getmy_attributeAweight(arow["ppntid"])+arow["attributeB_option1"]*getmy_attributeBweight(arow["ppntid"]),
+    			      sigma:getmy_calcsd(arow["ppntid"])});
+    	var calc2 = gaussian({mu:arow["attributeA_option2"]*getmy_attributeAweight(arow["ppntid"])+arow["attributeB_option2"]*getmy_attributeBweight(arow["ppntid"]),
+    			      sigma:getmy_calcsd(arow["ppntid"])});
+    	var calc3 = gaussian({mu:arow["attributeA_option3"]*getmy_attributeAweight(arow["ppntid"])+arow["attributeB_option3"]*getmy_attributeBweight(arow["ppntid"]),
+    			      sigma:getmy_calcsd(arow["ppntid"])});
+	
+    	var ordrelation = function(a,b,tolerance,orderr){
+    	    if(flip(orderr)) return categorical({vs:["<","=",">"],ps:[1,1,1]});
+    	    if(Math.abs(a-b)<tolerance) return "=";
+    	    if(a>b) return ">";
+    	    if(a<b) return "<";
+    	}
+	
+    	var ordA_12 = ordrelation(arow["attributeA_option1"],arow["attributeA_option2"],getmy_tolerance_attributeA(arow["ppntid"]),getmy_orderr(arow["ppntid"]));
+    	var ordA_13 = ordrelation(arow["attributeA_option1"],arow["attributeA_option3"],getmy_tolerance_attributeA(arow["ppntid"]),getmy_orderr(arow["ppntid"]));
+    	var ordA_23 = ordrelation(arow["attributeA_option2"],arow["attributeA_option3"],getmy_tolerance_attributeA(arow["ppntid"]),getmy_orderr(arow["ppntid"]));
+
+    	var ordB_12 = ordrelation(arow["attributeB_option1"],arow["attributeB_option2"],getmy_tolerance_attributeB(arow["ppntid"]),getmy_orderr(arow["ppntid"]));
+    	var ordB_13 = ordrelation(arow["attributeB_option1"],arow["attributeB_option3"],getmy_tolerance_attributeB(arow["ppntid"]),getmy_orderr(arow["ppntid"]));
+    	var ordB_23 = ordrelation(arow["attributeB_option2"],arow["attributeB_option3"],getmy_tolerance_attributeB(arow["ppntid"]),getmy_orderr(arow["ppntid"]));
+
+    	var agent = function(){
+    	    var attributeAPrior =  Uniform({a:0,b:10})//?
+    	    var  attributeBPrior = Uniform({a:0,b:15})//whatever?
+
+    	    var my_A1 = sample(attributeAPrior);
+    	    var my_A2 = sample(attributeAPrior);
+    	    var my_A3 = sample(attributeAPrior);
+    	    var my_B1 = sample(attributeBPrior);
+    	    var my_B2 = sample(attributeBPrior);
+    	    var my_B3 = sample(attributeBPrior);
+
+    	    observe(Gaussian({mu:my_A1*getmy_attributeAweight(arow["ppntid"])+my_B1*getmy_attributeBweight(arow["ppntid"]),sigma:getmy_calcsd(arow["ppntid"])}),calc1)
+    	    observe(Gaussian({mu:my_A2*getmy_attributeAweight(arow["ppntid"])+my_B2*getmy_attributeBweight(arow["ppntid"]),sigma:getmy_calcsd(arow["ppntid"])}),calc2)
+    	    observe(Gaussian({mu:my_A3*getmy_attributeAweight(arow["ppntid"])+my_B3*getmy_attributeBweight(arow["ppntid"]),sigma:getmy_calcsd(arow["ppntid"])}),calc3)
+
+    	    condition(ordA_12 ==ordrelation(my_A1,my_A2,getmy_tolerance_attributeA(arow["ppntid"]),getmy_orderr(arow["ppntid"])))
+    	    condition(ordA_13 ==ordrelation(my_A1,my_A3,getmy_tolerance_attributeA(arow["ppntid"]),getmy_orderr(arow["ppntid"])))
+    	    condition(ordA_23 ==ordrelation(my_A2,my_A3,getmy_tolerance_attributeA(arow["ppntid"]),getmy_orderr(arow["ppntid"])))
+
+    	    condition(ordB_12 ==ordrelation(my_B1,my_B2,getmy_tolerance_attributeB(arow["ppntid"]),getmy_orderr(arow["ppntid"])))
+    	    condition(ordB_13 ==ordrelation(my_B1,my_B3,getmy_tolerance_attributeB(arow["ppntid"]),getmy_orderr(arow["ppntid"])))
+    	    condition(ordB_23 ==ordrelation(my_B2,my_B3,getmy_tolerance_attributeB(arow["ppntid"]),getmy_orderr(arow["ppntid"])))
+
+    	    var opt1 = my_A1*getmy_attributeAweight(arow["ppntid"])+ my_B1*getmy_attributeBweight(arow["ppntid"])
+    	    var opt2 = my_A2*getmy_attributeAweight(arow["ppntid"])+ my_B2*getmy_attributeBweight(arow["ppntid"])
+    	    var opt3 = my_A3*getmy_attributeAweight(arow["ppntid"])+ my_B3*getmy_attributeBweight(arow["ppntid"])
+
+    	    return opt1>opt2&&opt1>opt3 ? 1 : opt2>opt1&&opt2>opt3 ? 2 : 3;
+    	}
+
+    	var myAgent = Infer({method:'MCMC',samples:500,burn:20,model:agent});
+    	return myAgent;	
+    }
+
+    //converting into row format to avoid touching decision maker code, which originally read in an R data frame.
+    //Actually the decision makers should be their own files, called from inside here! Check how webppl handles code across multiple files!
+    var myrow =  {Aweight:get_Aweight("ppntid"),
+		  Bweight:get_Bweight("ppntid"),
+		  calcsd:get_calcnoise("ppntid"),
+		  toleranceA:4, //reasonable? refer to A,B searchspace?
+		  toleranceB:4,
+		  orderr:0.1,
+		  attributeA_option1:A_opt1,
+		  attributeA_option2:A_opt2,
+		  attributeA_option3:A_opt3,
+		  attributeB_option1:B_opt1,
+		  attributeB_option2:B_opt2,
+		  attributeB_option3:B_opt3,
+		  ppntid:"ppntid" //placeholder, mainly here to avoid touching decision-maker code. Fewer touches = fewer bugs, right? Real solution is to have decision maker in a file, which you load and refer to here. Go check what the webppl mechanism is for code over multiple files!
+		 }
+
+    var getchoice_howes = sample(howes_decisiondist(myrow));
+    var getchoice_lm = sample(linear_decisiondist(myrow));
+
+    //condition on the trial being interesting.
+    var notTwins = function(A1,B1,A2,B2){
+    	return Math.abs(A1-A2) > 1 || Math.abs(B1-B2) > 1;//tolerance here probably matters! is 1 too lenient?
+    }
+
+    condition(getchoice_lm!=getchoice_howes); //Agents distinguishable iff they make different choices.
+    //but, having undecidable choices is a BS way to get high disagreement.
+    condition(notTwins(A_opt1,B_opt1,A_opt2,B_opt2));
+    condition(notTwins(A_opt1,B_opt1,A_opt3,B_opt3));
+    condition(notTwins(A_opt2,B_opt2,A_opt3,B_opt3));
+
+    var stimvals = [A_opt1,A_opt2,A_opt3,B_opt1,B_opt2,B_opt3];
+    return stimvals;
+}//end searcher
+
+
+Infer({method:"SMC",particles:1000,rejuvSteps:0,model:searcher})
