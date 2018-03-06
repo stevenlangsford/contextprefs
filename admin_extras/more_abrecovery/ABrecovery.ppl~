@@ -1,0 +1,136 @@
+//helper functions
+var countlist = function(n){
+    var countdown = function(n){//So ugly! But if you're gonna use this as an index, it makes more sense/keeps correct correspondances in count-up order.
+	if(n<=0) return [];
+	return [n-1].concat(countdown(n-1));
+    }
+    countdown(n).reverse()
+}
+var max = function(arr){reduce(function(a,b){if(a>b)return a; else return b;},arr[0],arr)};
+var hm_ppnts = max(map(function(arow){arow["ppntid"]},expdf))+1; //ASSUMING ids start from 0. Used to construct return values from mem-d functions by walking through a countlist of ppntids.
+
+var writelogs = true;
+var logprob = .01;
+//if(writelogs&&flip(logprob))json.write('attributeAlogs/test'+randomInteger(1000)+'.json', {writelogs:writelogs,logprob:logprob});
+
+var recover_agentparams = function(){
+
+    var  getmy_attributeAweight = mem(function(id){
+	return gaussian({mu:0,sigma:1})
+    })
+    var  getmy_attributeBweight = mem(function(id){
+	return gaussian({mu:0,sigma:1})
+    })
+    var getmy_calcsd = mem(function(id){
+	return 4;
+    })
+    var getmy_tolerance_attributeA = mem(function(id){
+	return 3;
+    })
+    var getmy_tolerance_attributeB= mem(function(id){
+	return 3;
+    })
+    var getmy_orderr = mem(function(id){
+	return .1;
+    })
+
+var decision_distribution = function(arow){    
+	var calc1 = gaussian({mu:arow["attributeA_option1"]*getmy_attributeAweight(arow["ppntid"])+arow["attributeB_option1"]*getmy_attributeBweight(arow["ppntid"]),
+			      sigma:getmy_calcsd(arow["ppntid"])});
+	var calc2 = gaussian({mu:arow["attributeA_option2"]*getmy_attributeAweight(arow["ppntid"])+arow["attributeB_option2"]*getmy_attributeBweight(arow["ppntid"]),
+			      sigma:getmy_calcsd(arow["ppntid"])});
+	var calc3 = gaussian({mu:arow["attributeA_option3"]*getmy_attributeAweight(arow["ppntid"])+arow["attributeB_option3"]*getmy_attributeBweight(arow["ppntid"]),
+			      sigma:getmy_calcsd(arow["ppntid"])});
+	
+	var ordrelation = function(a,b,tolerance,orderr){//these args are individual values...
+	    if(flip(orderr)) return categorical({vs:["<","=",">"],ps:[1,1,1]});
+	    if(Math.abs(a-b)<tolerance) return "=";
+	    if(a>b) return ">";
+	    if(a<b) return "<";
+	}
+	
+	var ordA_12 = ordrelation(arow["attributeA_option1"],arow["attributeA_option2"],getmy_tolerance_attributeA(arow["ppntid"]),getmy_orderr(arow["ppntid"]));
+	var ordA_13 = ordrelation(arow["attributeA_option1"],arow["attributeA_option3"],getmy_tolerance_attributeA(arow["ppntid"]),getmy_orderr(arow["ppntid"]));
+	var ordA_23 = ordrelation(arow["attributeA_option2"],arow["attributeA_option3"],getmy_tolerance_attributeA(arow["ppntid"]),getmy_orderr(arow["ppntid"]));
+
+	var ordB_12 = ordrelation(arow["attributeB_option1"],arow["attributeB_option2"],getmy_tolerance_attributeB(arow["ppntid"]),getmy_orderr(arow["ppntid"]));
+	var ordB_13 = ordrelation(arow["attributeB_option1"],arow["attributeB_option3"],getmy_tolerance_attributeB(arow["ppntid"]),getmy_orderr(arow["ppntid"]));
+	var ordB_23 = ordrelation(arow["attributeB_option2"],arow["attributeB_option3"],getmy_tolerance_attributeB(arow["ppntid"]),getmy_orderr(arow["ppntid"]));
+
+	var agent = function(){
+	    var attributeAPrior =  Uniform({a:0,b:10})//?
+	    var  attributeBPrior = Uniform({a:0,b:15})//whatever?
+
+	    var my_A1 = sample(attributeAPrior);
+	    var my_A2 = sample(attributeAPrior);
+	    var my_A3 = sample(attributeAPrior);
+	    var my_B1 = sample(attributeBPrior);
+	    var my_B2 = sample(attributeBPrior);
+	    var my_B3 = sample(attributeBPrior);
+
+	    observe(Gaussian({mu:my_A1*getmy_attributeAweight(arow["ppntid"])+my_B1*getmy_attributeBweight(arow["ppntid"]),sigma:getmy_calcsd(arow["ppntid"])}),calc1)
+	    observe(Gaussian({mu:my_A2*getmy_attributeAweight(arow["ppntid"])+my_B2*getmy_attributeBweight(arow["ppntid"]),sigma:getmy_calcsd(arow["ppntid"])}),calc2)
+	    observe(Gaussian({mu:my_A3*getmy_attributeAweight(arow["ppntid"])+my_B3*getmy_attributeBweight(arow["ppntid"]),sigma:getmy_calcsd(arow["ppntid"])}),calc3)
+
+	    condition(ordA_12 ==ordrelation(my_A1,my_A2,getmy_tolerance_attributeA(arow["ppntid"]),getmy_orderr(arow["ppntid"])))
+	    condition(ordA_13 ==ordrelation(my_A1,my_A3,getmy_tolerance_attributeA(arow["ppntid"]),getmy_orderr(arow["ppntid"])))
+	    condition(ordA_23 ==ordrelation(my_A2,my_A3,getmy_tolerance_attributeA(arow["ppntid"]),getmy_orderr(arow["ppntid"])))
+
+	    condition(ordB_12 ==ordrelation(my_B1,my_B2,getmy_tolerance_attributeB(arow["ppntid"]),getmy_orderr(arow["ppntid"])))
+	    condition(ordB_13 ==ordrelation(my_B1,my_B3,getmy_tolerance_attributeB(arow["ppntid"]),getmy_orderr(arow["ppntid"])))
+	    condition(ordB_23 ==ordrelation(my_B2,my_B3,getmy_tolerance_attributeB(arow["ppntid"]),getmy_orderr(arow["ppntid"])))
+
+	    var opt1 = my_A1*getmy_attributeAweight(arow["ppntid"])+ my_B1*getmy_attributeBweight(arow["ppntid"])
+	    var opt2 = my_A2*getmy_attributeAweight(arow["ppntid"])+ my_B2*getmy_attributeBweight(arow["ppntid"])
+	    var opt3 = my_A3*getmy_attributeAweight(arow["ppntid"])+ my_B3*getmy_attributeBweight(arow["ppntid"])
+
+	    if(writelogs&&flip(logprob))json.write('recovery_logs/test'+randomInteger(19999)+'.json', {
+		ppntid:arow["ppntid"],
+		Aweight:getmy_attributeAweight(arow["ppntid"]),
+		Bweight:getmy_attributeBweight(arow["ppntid"]),
+		calc1:calc1,
+		calc2:calc2,
+		calc3,calc3,
+		ordA12:ordA_12,
+		ordA13:ordA_13,
+		ordA23:ordA_23,
+		ordB12:ordB_12,
+		ordB13:ordB_13,
+		ordB23:ordB_23,
+		mychoice:(opt1>opt2&&opt1>opt3 ? 1 : opt2>opt1&&opt2>opt3 ? 2 : 3),
+		myA1:my_A1,
+		myA2:my_A2,
+		myA3:my_A3,
+		myB1:my_B1,
+		myB2:my_B2,
+		myB3:my_B3,
+		simA1:arow["attributeA_option1"],
+		simA2:arow["attributeA_option2"],
+		simA3:arow["attributeA_option3"],
+		simB1:arow["attributeB_option1"],
+		simB2:arow["attributeB_option2"],
+		simB3:arow["attributeB_option3"],
+	    });
+	    
+	    return opt1>opt2&&opt1>opt3 ? 1 : opt2>opt1&&opt2>opt3 ? 2 : 3;
+	}
+    return Infer({method:'MCMC',samples:500,burn:20,model:agent});	
+}
+
+    var obsfunction = function(arow){
+	observe(decision_distribution(arow), arow["choice"]);
+    }//end obsfunction
+
+    map(obsfunction,expdf)
+
+
+        var ret = [map(getmy_attributeAweight,countlist(hm_ppnts)),
+		   map(getmy_attributeBweight,countlist(hm_ppnts))
+		   ]
+    return ret;
+    
+    //more efficient to do this? vs risk of confusion with R reader switching formats between AB and prob-payoff versions?
+    // return map(function(x){return [getmy_attributeAweight(x),getmy_attributeBweight(x)]},countlist(hm_ppnts));
+}
+
+Infer({method:"MCMC",samples:1000,burn:150,lag:2,model:recover_agentparams}); //what impact #particles & #rejuvSteps?

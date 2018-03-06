@@ -1,0 +1,43 @@
+library(tidyverse)
+library(rwebppl)
+rm(list=ls())
+load("lmtest/runlmtest_recoverhowesmanyppnts.RData")
+lm_recoverhowes.df <- data.frame(estgap = ppntfacts.df$Aweight-expfacts.df$Aweight)#estgap= truth-recovered
+lmrecoverhowes_weightests.df <- ppntfacts.df
+
+lmrecoverhowes.plot <- ggplot(lm_recoverhowes.df,aes(x=estgap))+geom_histogram(binwidth=.05)+theme_bw()+ggtitle("lm recovering howes")+xlim(c(-.6,1.6))#exp is 'actual', 'ppnt' is recovered. Difference is <0, recovered weights are usually higher.
+
+rm(list=(setdiff(ls(),c("lmrecoverhowes.plot","lm_recoverhowes.df","lmrecoverhowes_weightests.df"))))
+load("lmtest/runlmtest_recoverlmmanyppnts.RData")
+
+lm_recoverlm.df <- data.frame(estgap = ppntfacts.df$Aweight-expfacts.df$Aweight) #estgap= truth-recovered
+lmrecoverlm.plot <- ggplot(lm_recoverlm.df,aes(x=estgap))+geom_histogram(binwidth=.05)+theme_bw()+ggtitle("lm recovering lm")+xlim(c(-.6,1.6))#exp is 'actual', 'ppnt' is recovered. Difference is <0, recovered weights are usually higher.
+
+lmrecoverlm_weightests.df <- ppntfacts.df
+
+#print(lmrecoverlm.plot); x11(); print(lmrecoverhowes.plot)
+
+#ggsave(lmrecoverlm.plot,file="lmrecoverlm.png")
+#ggsave(lmrecoverhowes.plot,file="lmrecoverhowes.png")
+
+names(lmrecoverlm_weightests.df) <- paste0(names(lmrecoverlm_weightests.df),"lmlm")
+names(lmrecoverhowes_weightests.df) <- paste0(names(lmrecoverhowes_weightests.df),"lmhowes")
+names(expfacts.df) <- paste0(names(expfacts.df),"simtruth")
+estcombo.df <- cbind(lmrecoverhowes_weightests.df,lmrecoverlm_weightests.df,expfacts.df)
+
+recovery.plot <- ggplot(estcombo.df,aes(x=Aweightsimtruth))+
+    geom_point(aes(y=Aweightlmhowes,color="lm_recover_howes"))+
+    geom_point(aes(y=Aweightlmlm,color="lm_recover_lm"))+
+    geom_point(aes(y=Aweightsimtruth,color="simtruth"))+
+    geom_line(aes(y=Aweightsimtruth,color="simtruth"))+
+    theme_bw()+ggtitle("Receovering A weight")+xlab("sim A weight")+ylab("recovered A weight")
+
+ggsave(recovery.plot,file="recovery.png")
+
+#B looks similar to A, whatever.
+## ggplot(estcombo.df,aes(x=Bweightsimtruth))+
+##     geom_point(aes(y=Bweightlmhowes,color="lm_recover_howes"))+
+##     geom_point(aes(y=Bweightlmlm,color="lm_recover_lm"))+
+##     geom_point(aes(y=Bweightsimtruth,color="simtruth"))+
+##     theme_bw()
+

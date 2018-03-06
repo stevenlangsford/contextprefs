@@ -1,0 +1,63 @@
+//helper functions
+    var countlist = function(n){ //returns [0 ... n-1]
+	var countdown = function(n){//ugly. recursion vs desire to count up instead of down.
+	    if(n<=0) return [];
+	    return [n-1].concat(countdown(n-1));
+	}
+	countdown(n).reverse()
+    }
+
+var whichmax = function(arr){ //returns index of max element (first index of tied max)
+    reduce(function(i1,i2){if(arr[i1]>arr[i2])return i1; else return i2},0,countlist(arr.length))
+}
+
+var max = function(arr){
+    reduce(function(a,b){a>b ? a : b},-Infinity,arr)
+}
+// var min = function(arr){
+//     reduce(function(a,b){a<b ? a : b}, Infinity,arr)
+// }
+
+
+var hm_ppnts = max(map(function(arow){arow["ppntid"]},expdf))+1; //ASSUMES ppntid starts from zero. Ok?
+
+//choice models:
+var linear_DM_model = function(){
+    var Aweight = mem(function(ppntid){return gaussian({mu:1,sigma:1})})
+    var Bweight = mem(function(ppntid){return gaussian({mu:1,sigma:1})})
+    var getnoise = mem(function(ppntid){return 4})
+    
+    var linear_eval = function(arow){
+	var optionlist = [Aweight(arow["ppntid"])*arow["attributeA_option1"]+
+			  Bweight(arow["ppntid"])*arow["attributeB_option1"]+
+			  gaussian({mu:0,sigma:getnoise(arow["ppntid"])}), //The noise distribution gives the model flavor. This is probit, which is fine, but don't confuse it with logistic, which swaps in EV-1 here.
+			  
+			  Aweight(arow["ppntid"])*arow["attributeA_option2"]+
+			  Bweight(arow["ppntid"])*arow["attributeB_option2"]+
+			  gaussian({mu:0,sigma:getnoise(arow["ppntid"])}),
+			  
+			  Aweight(arow["ppntid"])*arow["attributeA_option3"]+
+			  Bweight(arow["ppntid"])*arow["attributeB_option3"]+
+			  gaussian({mu:0,sigma:getnoise(arow["ppntid"])})
+			 ]
+	var option_sum = reduce(function(a,b){a+b},0,map(function(x){Math.exp(x)},optionlist))
+	var option_prob = map(function(x){Math.exp(x)/option_sum},optionlist)
+
+//	console.log(arow);//diag
+//	console.log(option_prob);//diag
+
+	return Categorical({vs:[1,2,3],ps:option_prob}) //softmax decision maker
+    }
+    
+    var observe_row = function(arow){
+	observe(linear_eval(arow),arow["choice"])
+    }
+    
+    map(observe_row,expdf)
+    return map(function(x){return [x,Aweight(x),Bweight(x)]},countlist(hm_ppnts))
+}//end linear_DM model
+
+
+//Infer({method:"incrementalMH",samples:1000,model:linear_DM_model})
+Infer({method:"MCMC",samples:25000,burn:1000,lag:5,model:linear_DM_model})
+//Infer({method:"SMC",particles:1000,model:linear_DM_model})

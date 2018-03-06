@@ -1,0 +1,37 @@
+var Aweight = gaussian({mu:10,sigma:2})
+var Bweight = gaussian({mu:10,sigma:2})
+
+//var max = function(arr){reduce(function(a,b){if(a>b)return a; else return b;},arr[0],arr)};
+
+//helper functions
+var countlist = function(n){
+    var countdown = function(n){//ugly. recursion vs desire to count up instead of down.
+	if(n<=0) return [];
+	return [n-1].concat(countdown(n-1));
+    }
+    countdown(n).reverse()
+}
+
+//get index of max element in a list
+var whichmax = function(arr){reduce(function(i1,i2){if(arr[i1]>arr[i2])return i1; else return i2},0,countlist(arr.length))}
+
+
+var linear_eval = function(option,noise){
+    return Aweight*option.a+Bweight*option.b+gaussian({mu:0,sigma:noise});
+}
+
+var linear_DM = function(optionlist,noise){ //take the max of linear eval results
+    return  whichmax(map(function(anoption){return linear_eval(anoption,noise)},optionlist))
+}
+
+
+//sandpit zone
+
+var trial = [{a:1, b:2},{a:0,b:0},{a:2,b:1}];
+var noisetoday = 2;
+
+// console.log(Aweight+":"+Bweight)
+// console.log(map(function(anoption){linear_eval(anoption,noisetoday)},trial))
+// console.log(linear_DM(trial,noisetoday))
+
+linear_DM(trial,noisetoday)
