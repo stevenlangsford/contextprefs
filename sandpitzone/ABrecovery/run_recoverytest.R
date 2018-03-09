@@ -3,12 +3,18 @@ library(rwebppl)
 
 simexp.df <- read.csv(file="ABsimexp_withchoices.csv")%>%select(contains("attribute"),ppntid,Aweight,Bweight,contains("value"),contains("choice"))
 hm_ppnts <- max(simexp.df$ppntid)+1
+hm_items <- nrow(simexp.df)/hm_ppnts
+simexp.df$trialid <- rep(1:hm_items,each=hm_ppnts)
 
-starttime <- Sys.time()
-fit.recovery <- webppl(program_file="ABrecovery.ppl",data=simexp.df,data_var="expdf",packages=c("webppl-json"))
+##MINIRUN FILTERS. iterate on small stuff.
+simexp.df <- filter(simexp.df,ppntid==0)%>%as.data.frame
+hm_ppnts <- length(unique(simexp.df$ppntid))
+hm_items <- length(unique(simexp.df$trialid))
+##END MINI
+
+runtime <- system.time({
+fit.recovery <<- webppl(program_file="ABrecovery.ppl",data=simexp.df,data_var="expdf",packages=c("webppl-json"))})
 save(fit.recovery,file="fitrecovery.RData")
-endtime <- Sys.time()
-runtime <- endtime-starttime
 
 fit.samples <- fit.recovery[[1]]
 
@@ -24,4 +30,4 @@ for(asample in 1:length(fit.samples)){
 }
 
 save.image(file="runrecoverytest_complete.RData")
-
+View("done")
