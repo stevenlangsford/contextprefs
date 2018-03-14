@@ -1,0 +1,21 @@
+var simtruth = Gaussian({mu:100,sigma:15});
+
+var data = repeat(10,function(x){sample(simtruth)})
+
+var model = function(){
+    var mymu = modelParam({name:'mu',mu:100,sigma:15});//gaussian({mu:50,sigma:50})//
+    var mysigma = Math.abs(modelParam({name:'sigma',mu:10,sigma:10}));//Math.abs(gaussian({mu:10,sigma:10}));
+    var estDist = Gaussian({mu:mymu,sigma:mysigma});
+//    map(function(x){observe(estDist,x)},data);
+    mapData({data:data},function(x){observe(estDist,x)});
+    return(mymu);
+};
+
+Optimize({model: model, steps: 1000, optMethod:{adam:{stepSize:.1}}});
+
+console.log("datamean:"+reduce(function(a,b){a+b},0,data)/data.length);
+
+console.log(getParams().mu);
+ console.log(Math.abs(getParams().sigma));
+//var ans = Infer({method:'MCMC',samples:1000,burn:100,model:model})
+//expectation(ans);

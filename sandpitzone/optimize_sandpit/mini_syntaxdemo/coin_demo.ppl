@@ -1,0 +1,12 @@
+var k = 3;
+var n = 10;
+
+var model = function(){
+    var p = Math.sigmoid(modelParam({name:'p'}));
+    var dist = Binomial({p,n});
+    observe(dist,k);
+    return p;
+}
+Optimize({model: model, steps: 1000, optMethod:{adam:{stepSize:.1}}});
+
+Math.sigmoid(getParams().p);

@@ -1,0 +1,78 @@
+//sequential sampling decision maker inspired by howes16.
+//You can either deadreckon or compare features (where a feature is a particular value of an attribute/dimension)
+//Agent parameters are deadreckon_cost, compare_cost, and est_noise (one noise param per attribute)
+//Agent is aware of the world distributions of each attribute and uses these as priors.
+
+//Agent estimates the information value of each 'observation' in terms of payoff utility:
+//ie: expected payoff if choosing now, expected payoff if chosing after one more observation. You don't know what the observation is going to be, but you can monte-carlo and see where you end up?
+//Since observations have a cost, at some point getting more information is not going to be worth it.
+
+//helper functions
+var countlist = function(n){
+    var countdown = function(n){//So ugly! But if you're gonna use this as an index, it makes more sense/keeps correct correspondances in count-up order.
+	if(n<=0) return [];
+	return [n-1].concat(countdown(n-1));
+    }
+    countdown(n).reverse()
+}
+
+//noise adding functions. Takes a ppntid and returns a function that adds noise to an attribute value. mem lets ppnts have characteristic noise levels.
+//These are necessarily specific to particular attributes, and the interpretation of 'noise level' varies by attribute.
+var get_probnoiseadder = mem(function(ppntid){
+    var noise_level = uniform({a:0.1,b:5}); //PLACEHOLDER PRIOR think about what this should be.
+
+    var logit = function(x){
+	Math.log(x/(1-x))
+    }
+    var inv_logit = function(x){
+	1/(1+Math.exp(-x))  
+    }
+
+    return function(x){
+	inv_logit(logit(x)+gaussian({mu:0,sigma:noise_level}))  
+    }
+})
+
+var get_payoffnoiseadder = mem(function(ppntid){
+    var noise_level = uniform({a:1,b:10}) //PLACEHOLDER PRIOR think about this.
+    return function(x){
+	return x+gaussian({mu:0,sigma:noise_level});
+    }
+})
+
+//world setup
+var hm_attributes = 2;
+var hm_options = 3;
+
+//data setup: assume datadf
+
+var attribute_distributions = [Beta({a:1,b:1}), Gaussian({mu:100,sigma:30})]; //these are for [prob, payoff] options (in that order)
+var attribute_noiseadders = [get_probnoiseadder, get_payoffnoiseadder]; //Be strict about making this list match the attribute one above, then you can automatically call the right noiseadder for each attribute.
+
+var stim = repeat(hm_options,function(x){return map(sample,attribute_distributions)});//each entry in stim is a list of particular values for each attribute.
+
+var attribute_combination_rule = function(attribute_array){ //should return a utility/subjective-value score.
+    return attribute_array[0]*attribute_array[1];    //this rule is appropriate for [prob,payoff] objects
+}
+
+//observation functions
+var deadreckon = function(option,attribute,ppntid){
+    //option and attribute are int indexes into 'stim'.
+    var mynoisegetter = attribute_noiseadders[attribute]; //must name before using, can't just whack parens on the end of this.
+    var mynoise = mynoisegetter(ppntid);
+    return mynoise(stim[option][attribute]);
+}
+
+var compare = function(option1,option2,attribute,ppntid){
+    //again, option and attribute are int indexes into stim
+    var mynoisegetter = attribute_noiseadders[attribute]; //must name before using, can't just whack parens on the end of this.
+    var mynoise = mynoisegetter(ppntid);
+    return mynoise(stim[option1][attribute]-stim[option2][attribute]); //adds ppnt's noise to the *difference* between attributes.
+}
+
+
+console.log(stim);
+console.log("***")
+
+
+repeat(4,function(){deadreckon(0,1,"bob")});

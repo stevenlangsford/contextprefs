@@ -6,7 +6,7 @@ simexp.df <- read.csv(file="simexp.csv")%>%select(contains("attribute"),ppntid,A
 hm_ppnts <- length(unique(simexp.df$ppntid))
 simexp.df$trialid <- rep(1:(nrow(simexp.df)/hm_ppnts), each=hm_ppnts)
 
-simexp.df <- filter(ppntid==0)
+simexp.df <- simexp.df%>%filter(ppntid==0)
 
 runtime <- system.time(
 {fit.recovery <<- webppl(program_file="ABrecovery.ppl",data=simexp.df,data_var="expdf")} #,packages=c("webppl-json")

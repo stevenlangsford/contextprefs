@@ -11,6 +11,10 @@ var max = function(arr){
 };
 var hm_ppnts = max(map(function(arow){return arow.ppntid;},expdf))+1; //ASSUMING ids start from 0. Used to construct return values from mem-d functions by walking through a countlist of ppntids.
 
+var writelogs = false;
+var logprob = 0.001;
+//if(writelogs&&flip(logprob))json.write('attributeAlogs/test'+randomInteger(1000)+'.json', {writelogs:writelogs,logprob:logprob});
+
 var recover_agentparams = function(){
         
     var  getmy_attributeAweight = mem(function(id){
@@ -18,9 +22,9 @@ var recover_agentparams = function(){
 	//Assuming: A and B are coded such that higher numbers mean more likely to be chosen (probably it's possible to be unsure what the sign of an attribute should be... this model can't help you there?)
 	//Also assuming A and B are independent, no interactions! That is definitely not true in general.
     });
-    var  getmy_attributeBweight = mem(function(id){
-	return modelParam({name:('ppntB_'+id),mu:1,sigma:5}); //Guide distribution, should be 'close' as you can get it, but not interpretable as a prior.
-    });
+    var  getmy_attributeBweight = function(id){//optimize removes mem, uses ppnt-specific modelParam id instead. Is this correct?
+	return modelParam({name:('ppntB_'+id),mu:0,sigma:5}); //Guide distribution, should be 'close' as you can get it, not interpretable as a prior.
+    };
     var getmy_calcsd = mem(function(id){
 	return 4;
     });
@@ -58,15 +62,15 @@ var recover_agentparams = function(){
 	var ordB_23 = ordrelation(arow.attributeB_option2,arow.attributeB_option3,getmy_tolerance_attributeB(arow.ppntid),getmy_orderr(arow.ppntid));
 
 	var agent = function(){
-	     var attributeAPrior =  Uniform({a:0,b:15});//true dist in manyppnts.csv
-	     var  attributeBPrior = Uniform({a:0,b:15});//is A:0-10,B:0-15
+	    var attributeAPrior =  Uniform({a:0,b:15});//true dist in manyppnts.csv
+	    var  attributeBPrior = Uniform({a:0,b:15});//is A:0-10,B:0-15
 
-	     var my_A1 = sample(attributeAPrior);
-	     var my_A2 = sample(attributeAPrior);
-	     var my_A3 = sample(attributeAPrior);
-	     var my_B1 = sample(attributeBPrior);
-	     var my_B2 = sample(attributeBPrior);
-	     var my_B3 = sample(attributeBPrior);
+	    var my_A1 = sample(attributeAPrior);
+	    var my_A2 = sample(attributeAPrior);
+	    var my_A3 = sample(attributeAPrior);
+	    var my_B1 = sample(attributeBPrior);
+	    var my_B2 = sample(attributeBPrior);
+	    var my_B3 = sample(attributeBPrior);
 
 	    observe(Gaussian({mu:my_A1*getmy_attributeAweight(arow.ppntid)+my_B1*getmy_attributeBweight(arow.ppntid),sigma:getmy_calcsd(arow.ppntid)}),calc1);
 	    observe(Gaussian({mu:my_A2*getmy_attributeAweight(arow.ppntid)+my_B2*getmy_attributeBweight(arow.ppntid),sigma:getmy_calcsd(arow.ppntid)}),calc2);
@@ -83,27 +87,40 @@ var recover_agentparams = function(){
 	    var opt1 = my_A1*getmy_attributeAweight(arow.ppntid)+ my_B1*getmy_attributeBweight(arow.ppntid);
 	    var opt2 = my_A2*getmy_attributeAweight(arow.ppntid)+ my_B2*getmy_attributeBweight(arow.ppntid);
 	    var opt3 = my_A3*getmy_attributeAweight(arow.ppntid)+ my_B3*getmy_attributeBweight(arow.ppntid);
+
+	    // if(writelogs&&flip(logprob))json.write('recovery_logs/test'+randomInteger(9999)+'.json', {
+	    // 	ppntid:arow.ppntid,
+	    // 	trialid:arow.trialid,
+	    // 	Aweight:getmy_attributeAweight(arow.ppntid),
+	    // 	Bweight:getmy_attributeBweight(arow.ppntid),
+	    // 	calc1:calc1,
+	    // 	calc2:calc2,
+	    // 	calc3:calc3,
+	    // 	ordA12:ordA_12,
+	    // 	ordA13:ordA_13,
+	    // 	ordA23:ordA_23,
+	    // 	ordB12:ordB_12,
+	    // 	ordB13:ordB_13,
+	    // 	ordB23:ordB_23,
+	    // 	mychoice:(opt1>opt2&&opt1>opt3 ? 1 : opt2>opt1&&opt2>opt3 ? 2 : 3),
+	    // 	myA1:my_A1,
+	    // 	myA2:my_A2,
+	    // 	myA3:my_A3,
+	    // 	myB1:my_B1,
+	    // 	myB2:my_B2,
+	    // 	myB3:my_B3,
+	    // 	simA1:arow.attributeA_option1,
+	    // 	simA2:arow.attributeA_option2,
+	    // 	simA3:arow.attributeA_option3,
+	    // 	simB1:arow.attributeB_option1,
+	    // 	simB2:arow.attributeB_option2,
+	    // 	simB3:arow.attributeB_option3,
+	    // });
 	    
-	    return opt1>opt2&&opt1>opt3 ? 1 : opt2>opt1&&opt2>opt3 ? 2 : 3; //This is hardmax, softmax also greenlighted for this step, which might be good AND also help with the fudgefactor thing below? Would be great if you could softmax here and take the ff away. Look into this then delete this comment.
-
-	};//end agent function
-	var myagent = Infer({method:'MCMC',samples:500,burn:50,model:agent}); //would be highly desirable to beef these up a bit if at all possible.
-	//Infer({method: 'SMC', particles: 250, rejuvSteps: 5, model: agent}); //nice but crashes if all particle weights happen to be zero. Which is going to happen eventually if you run it often enough.
-	
-	//any total certainty gives non-finite factor scores to ELBO, which makes it so unhappy that it dies.
-	//myagent is sometimes certain, so introduce a small fudge factor giving support to all options.
-	var fudgefactor = .001
-	return Categorical(
-	    {vs:[1,2,3],
-	     ps:[
-		 Math.exp(myagent.score(1))+fudgefactor, //webppl will re-normalize so ps sum to 1
-		 Math.exp(myagent.score(2))+fudgefactor,
-		 Math.exp(myagent.score(3))+fudgefactor
-	     ]
-	    });
-	//	return Infer({method:'MCMC',samples:500,burn:20,model:agent});
-
-    };//end decision_distribution(arow)
+	    return opt1>opt2&&opt1>opt3 ? 1 : opt2>opt1&&opt2>opt3 ? 2 : 3;
+	};
+	return Infer({method:'MCMC',samples:500,burn:20,model:agent});//would be nice to beef these up, more samples and lag if you have the cpu to burn.
+    };
 
     var obsfunction = function(arow){
 	observe(decision_distribution(arow), arow.choice);
@@ -111,13 +128,8 @@ var recover_agentparams = function(){
 
     mapData({data:expdf},obsfunction);//opt uses mapData rather than map 'where possible'. Is this possible, or should it be applied over participant-level chunks? Requirement is 'conditional independence', ppnts are independent, obs from the same ppnt not, unless the 'conditional' part means 'conditional on the modelParams'. RESOLVE THIS.
 
-    // var ret =  map(function(x){return [x, getmy_attributeBweight(x)]},countlist(hm_ppnts));
-    // return ret;
+    var ret =  map(function(x){return [x, getmy_attributeBweight(x)]},countlist(hm_ppnts));
+    return ret;
 }
 
-
-
-Optimize({model:recover_agentparams,steps:1000,optMethod:{adam:{stepSize:.1}}});//1000 steps more realistic, more is better.
-
-//return value:
-map(function(x){return getParams()[('ppntB_'+x)]},countlist(hm_ppnts))
+Optimize({model:recover_agentparams,steps:5,optMethod:{adam:{stepSize:.1}}}); //1000 steps more realistic. The higher the better?

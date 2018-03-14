@@ -1,0 +1,29 @@
+var truemean = 100;
+var obsnoise = 5;
+var getobs = function(){gaussian({mu:truemean,sigma:obsnoise})}
+var data = repeat(10,getobs);
+
+var save_gaussianapprox = function(filename,mydist){
+    var mysamples = repeat(5000,function(){sample(mydist)}); //samples are cheap, knock yourself out.
+    var mymean = reduce(function(a,b){a+b},0,mysamples)/mysamples.length;
+    var mysd = Math.sqrt(reduce(function(a,b){a+b},0,
+			    map(function(x){Math.pow(x-mymean,2)},
+				mysamples//end repeat
+			       )//end map
+			   )//end reduce (sum) 
+			 /4999);//end sqrt
+    json.write(filename,{mu:mymean,sigma:mysd});
+}
+
+var load_gaussianapprox = function(filename){
+    var params = json.read(filename);
+    return Gaussian({mu:params.mu,sigma:params.sigma});
+}
+
+//sandpit zone:
+// var demo_dist = Gaussian({mu:100,sigma:15});
+// save_gaussianapprox("mygaussian.json",demo_dist);
+
+
+"done"
+
