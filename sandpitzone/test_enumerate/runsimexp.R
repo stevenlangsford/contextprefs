@@ -14,8 +14,8 @@ getcalcsd <- function(){
     return(3); ##? reasonable?
 }
 ##exp params
-hm_ppnts <- 10;
-hm_trials <- 30;
+hm_ppnts <- 10
+hm_trials <- 3
 
 ##set up the stimuli:
 trials.df <- data.frame(attributeA_option1=c(),

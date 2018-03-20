@@ -1,0 +1,121 @@
+//helper functions
+var countlist = function(n){
+    var countdown = function(n){//So ugly! But if you're gonna use this as an index, it makes more sense/keeps correct correspondances in count-up order.
+	if(n<=0) return [];
+	return [n-1].concat(countdown(n-1));
+    };
+    countdown(n).reverse();
+};
+var max = function(arr){
+    return reduce(function(a,b){if(a>b)return a; else return b;},arr[0],arr);
+};
+var hm_ppnts = max(map(function(arow){return arow.ppntid;},expdf))+1; //ASSUMING ids start from 0. Used to construct return values from mem-d functions by walking through a countlist of ppntids.
+
+var recover_agentparams = function(){
+        
+    var  getmy_attributeAweight = mem(function(id){
+	return 1; //Welcome to ABratio! Because all you care about is option ranks, you can express B in terms of scalefactor*Aweight and have the same model!
+	//Assuming: A and B are coded such that higher numbers mean more likely to be chosen (probably it's possible to be unsure what the sign of an attribute should be... this model can't help you there?)
+	//Also assuming A and B are independent, no interactions! That is definitely not true in general.
+    });
+    var  getmy_attributeBweight = mem(function(id){
+	return modelParam({name:('ppntB_'+id),mu:1,sigma:5}); //Guide distribution, should be 'close' as you can get it, but not interpretable as a prior.
+    });
+    var getmy_calcsd = mem(function(id){
+	return 4;
+    });
+    var getmy_tolerance_attributeA = mem(function(id){
+	return 3;
+    });
+    var getmy_tolerance_attributeB= mem(function(id){
+	return 3;
+    });
+    var getmy_orderr = mem(function(id){
+	return 0.1;
+    });
+
+    var decision_distribution = function(arow){    
+	var calc1 = gaussian({mu:arow.attributeA_option1*getmy_attributeAweight(arow.ppntid)+arow.attributeB_option1*getmy_attributeBweight(arow.ppntid),
+			      sigma:getmy_calcsd(arow.ppntid)});
+	var calc2 = gaussian({mu:arow.attributeA_option2*getmy_attributeAweight(arow.ppntid)+arow.attributeB_option2*getmy_attributeBweight(arow.ppntid),
+			      sigma:getmy_calcsd(arow.ppntid)});
+	var calc3 = gaussian({mu:arow.attributeA_option3*getmy_attributeAweight(arow.ppntid)+arow.attributeB_option3*getmy_attributeBweight(arow.ppntid),
+			      sigma:getmy_calcsd(arow.ppntid)});
+	
+	var ordrelation = function(a,b,tolerance,orderr){//these args are individual values...
+	    if(flip(orderr)) return categorical({vs:["<","=",">"],ps:[1,1,1]});
+	    if(Math.abs(a-b)<tolerance) return "=";
+	    if(a>b) return ">";
+	    if(a<b) return "<";
+	};
+	
+	var ordA_12 = ordrelation(arow.attributeA_option1,arow.attributeA_option2,getmy_tolerance_attributeA(arow.ppntid),getmy_orderr(arow.ppntid));
+	var ordA_13 = ordrelation(arow.attributeA_option1,arow.attributeA_option3,getmy_tolerance_attributeA(arow.ppntid),getmy_orderr(arow.ppntid));
+	var ordA_23 = ordrelation(arow.attributeA_option2,arow.attributeA_option3,getmy_tolerance_attributeA(arow.ppntid),getmy_orderr(arow.ppntid));
+
+	var ordB_12 = ordrelation(arow.attributeB_option1,arow.attributeB_option2,getmy_tolerance_attributeB(arow.ppntid),getmy_orderr(arow.ppntid));
+	var ordB_13 = ordrelation(arow.attributeB_option1,arow.attributeB_option3,getmy_tolerance_attributeB(arow.ppntid),getmy_orderr(arow.ppntid));
+	var ordB_23 = ordrelation(arow.attributeB_option2,arow.attributeB_option3,getmy_tolerance_attributeB(arow.ppntid),getmy_orderr(arow.ppntid));
+
+	var agent = function(){
+	     var attributeAPrior =  Uniform({a:0,b:15});//true dist in manyppnts.csv
+	     var  attributeBPrior = Uniform({a:0,b:15});//is A:0-10,B:0-15
+
+	     var my_A1 = sample(attributeAPrior);
+	     var my_A2 = sample(attributeAPrior);
+	     var my_A3 = sample(attributeAPrior);
+	     var my_B1 = sample(attributeBPrior);
+	     var my_B2 = sample(attributeBPrior);
+	     var my_B3 = sample(attributeBPrior);
+
+	    observe(Gaussian({mu:my_A1*getmy_attributeAweight(arow.ppntid)+my_B1*getmy_attributeBweight(arow.ppntid),sigma:getmy_calcsd(arow.ppntid)}),calc1);
+	    observe(Gaussian({mu:my_A2*getmy_attributeAweight(arow.ppntid)+my_B2*getmy_attributeBweight(arow.ppntid),sigma:getmy_calcsd(arow.ppntid)}),calc2);
+	    observe(Gaussian({mu:my_A3*getmy_attributeAweight(arow.ppntid)+my_B3*getmy_attributeBweight(arow.ppntid),sigma:getmy_calcsd(arow.ppntid)}),calc3);
+
+	    condition(ordA_12 ==ordrelation(my_A1,my_A2,getmy_tolerance_attributeA(arow.ppntid),getmy_orderr(arow.ppntid)));
+	    condition(ordA_13 ==ordrelation(my_A1,my_A3,getmy_tolerance_attributeA(arow.ppntid),getmy_orderr(arow.ppntid)));
+	    condition(ordA_23 ==ordrelation(my_A2,my_A3,getmy_tolerance_attributeA(arow.ppntid),getmy_orderr(arow.ppntid)));
+
+	    condition(ordB_12 ==ordrelation(my_B1,my_B2,getmy_tolerance_attributeB(arow.ppntid),getmy_orderr(arow.ppntid)));
+	    condition(ordB_13 ==ordrelation(my_B1,my_B3,getmy_tolerance_attributeB(arow.ppntid),getmy_orderr(arow.ppntid)));
+	    condition(ordB_23 ==ordrelation(my_B2,my_B3,getmy_tolerance_attributeB(arow.ppntid),getmy_orderr(arow.ppntid)));
+
+	    var opt1 = my_A1*getmy_attributeAweight(arow.ppntid)+ my_B1*getmy_attributeBweight(arow.ppntid);
+	    var opt2 = my_A2*getmy_attributeAweight(arow.ppntid)+ my_B2*getmy_attributeBweight(arow.ppntid);
+	    var opt3 = my_A3*getmy_attributeAweight(arow.ppntid)+ my_B3*getmy_attributeBweight(arow.ppntid);
+	    
+	    return opt1>opt2&&opt1>opt3 ? 1 : opt2>opt1&&opt2>opt3 ? 2 : 3; //This is hardmax, softmax also greenlighted for this step, which might be good AND also help with the fudgefactor thing below? Would be great if you could softmax here and take the ff away. Look into this then delete this comment.
+
+	};//end agent function
+	var myagent = Infer({method:'MCMC',samples:500,burn:50,model:agent}); //would be highly desirable to beef these up a bit if at all possible.
+	//Infer({method: 'SMC', particles: 250, rejuvSteps: 5, model: agent}); //nice but crashes if all particle weights happen to be zero. Which is going to happen eventually if you run it often enough.
+	
+	//any total certainty gives non-finite factor scores to ELBO, which makes it so unhappy that it dies.
+	//myagent is sometimes certain, so introduce a small fudge factor giving support to all options.
+	var fudgefactor = .001
+	return Categorical(
+	    {vs:[1,2,3],
+	     ps:[
+		 Math.exp(myagent.score(1))+fudgefactor, //webppl will re-normalize so ps sum to 1
+		 Math.exp(myagent.score(2))+fudgefactor,
+		 Math.exp(myagent.score(3))+fudgefactor
+	     ]
+	    });
+    };//end decision_distribution(arow)
+
+    var obsfunction = function(arow){
+	observe(decision_distribution(arow), arow.choice);
+    };//end obsfunction
+
+    mapData({data:expdf},obsfunction);//opt uses mapData rather than map 'where possible'. Is this possible, or should it be applied over participant-level chunks? Requirement is 'conditional independence', ppnts are independent, obs from the same ppnt not, unless the 'conditional' part means 'conditional on the modelParams'. RESOLVE THIS.
+
+    // var ret =  map(function(x){return [x, getmy_attributeBweight(x)]},countlist(hm_ppnts));
+    // return ret;
+}
+
+
+
+Optimize({model:recover_agentparams,steps:300,optMethod:{adam:{stepSize:.1}}});//Apparently ~300 steps to converge, say 500 to be conservative.
+
+//return value:
+map(function(x){return getParams()[('ppntB_'+x)]},countlist(hm_ppnts))

@@ -1,0 +1,5 @@
+var simtruth = Gaussian({mu:100,sigma:15});
+
+var data = repeat(function(x){sample(simtruth)},10)
+
+data

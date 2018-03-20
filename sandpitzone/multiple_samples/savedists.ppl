@@ -20,10 +20,17 @@ var load_gaussianapprox = function(filename){
     return Gaussian({mu:params.mu,sigma:params.sigma});
 }
 
+var save_categorical = function(filename,mydist){
+    
+}
+
+
+var bob = Categorical({vs:[1,2,3],ps:[1,1,1]});
 //sandpit zone:
 // var demo_dist = Gaussian({mu:100,sigma:15});
 // save_gaussianapprox("mygaussian.json",demo_dist);
-
+json.write("test.json",bob);
+console.log(repeat(10,function(){sample(bob)}))
 
 "done"
 
