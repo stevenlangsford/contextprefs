@@ -1,0 +1,75 @@
+ 
+  var ordobs_singlestatus = function(a,b,tolerance,orderr){
+	if(flip(orderr)) return categorical({vs:["<","=",">"],ps:[1,1,1]});
+	if(Math.abs(a-b)<tolerance) return "=";
+	if(a>b) return ">";
+	if(a<b) return "<";
+    };
+    
+    var ordobs_distribution = function(a,b,tolerance,orderr){
+	return Enumerate(function(){
+	    if(flip(orderr)) return categorical({vs:["<","=",">"],ps:[1,1,1]});
+	    if(Math.abs(a-b)<tolerance) return "=";
+	    if(a>b) return ">";
+	    if(a<b) return "<";
+	});
+    };
+    
+    var choicefn = function(arow){
+	console.log("choosing for "+arow.rowname);//progress marker (time-expensive, delete asap)
+
+
+	var getBweight = mem(function(ppntid){
+	    return arow.Bweight;// return uniform({a:0,b:10});
+	});
+	
+	var getcalcsd = mem(function(ppntid){
+	    return 1; //TODO recover this too (for now check it matches sim val?)
+	});
+	
+	var gettolerance = mem(function(ppntid){
+	    return 1;//Maybe this can stay fixed... but TODO think about what value it should be!
+	});
+	
+	var getorderr = mem(function(ppntid){
+	    return 0.01;
+	});
+	
+	var choicedistribution = function(){
+	var Aest = repeat(3,function(){return uniform({a:0,b:10});});
+	var Best = repeat(3,function(){return uniform({a:0,b:10});});
+	
+	var calc1 = gaussian({mu:arow.attributeA_option1+arow.attributeB_option1*getBweight(arow.ppntid),sigma:getcalcsd(arow.ppntid)});
+	observe(Gaussian({mu:Aest[0]+Best[0]*getBweight(arow.ppntid),sigma:getcalcsd(arow.ppntid)}),calc1);
+	var calc2 = gaussian({mu:arow.attributeA_option2+arow.attributeB_option2*getBweight(arow.ppntid),sigma:getcalcsd(arow.ppntid)});
+	observe(Gaussian({mu:Aest[1]+Best[1]*getBweight(arow.ppntid),sigma:getcalcsd(arow.ppntid)}),calc2);
+	var calc3 = gaussian({mu:arow.attributeA_option3+arow.attributeB_option3*getBweight(arow.ppntid),sigma:getcalcsd(arow.ppntid)});
+	observe(Gaussian({mu:Aest[2]+Best[2]*getBweight(arow.ppntid),sigma:getcalcsd(arow.ppntid)}),calc3);
+
+	var ordA_12 = ordobs_singlestatus(arow.attributeA_option1,arow.attributeA_option2,gettolerance(arow.ppntid), getorderr(arow.ppntid));
+	observe(ordobs_distribution(Aest[0],Aest[1], gettolerance(arow.ppntid), getorderr(arow.ppntid)),ordA_12);
+	var ordA_13 = ordobs_singlestatus(arow.attributeA_option1,arow.attributeA_option3,gettolerance(arow.ppntid), getorderr(arow.ppntid));
+	observe(ordobs_distribution(Aest[0],Aest[2], gettolerance(arow.ppntid), getorderr(arow.ppntid)),ordA_13);
+	var ordA_23 = ordobs_singlestatus(arow.attributeA_option2,arow.attributeA_option3,gettolerance(arow.ppntid), getorderr(arow.ppntid));
+	observe(ordobs_distribution(Aest[1],Aest[2], gettolerance(arow.ppntid), getorderr(arow.ppntid)),ordA_23);
+
+	var ordB_12 = ordobs_singlestatus(arow.attributeB_option1,arow.attributeB_option2,gettolerance(arow.ppntid), getorderr(arow.ppntid));
+	observe(ordobs_distribution(Best[0],Best[1], gettolerance(arow.ppntid), getorderr(arow.ppntid)),ordB_12);
+	var ordB_13 = ordobs_singlestatus(arow.attributeB_option1,arow.attributeB_option3,gettolerance(arow.ppntid), getorderr(arow.ppntid));
+	observe(ordobs_distribution(Best[0],Best[2], gettolerance(arow.ppntid), getorderr(arow.ppntid)),ordB_13);
+	var ordB_23 = ordobs_singlestatus(arow.attributeB_option2,arow.attributeB_option3,gettolerance(arow.ppntid), getorderr(arow.ppntid));
+	observe(ordobs_distribution(Best[1],Best[2], gettolerance(arow.ppntid), getorderr(arow.ppntid)),ordB_23);
+	
+	var estvalues = [Aest[0]+Best[0]*getBweight(arow.ppntid),
+			 Aest[1]+Best[1]*getBweight(arow.ppntid),
+			 Aest[2]+Best[2]*getBweight(arow.ppntid)];
+
+	//softmax choice rule on inferred value
+	    var sumexp = reduce(function(a,b){return a+b;},0,map(function(x){return Math.exp(x);},estvalues));
+	    var p_choice = map(function(x){return Math.exp(x)/sumexp;},estvalues);
+	    return categorical({vs:[1,2,3],ps:p_choice});
+	};
+	sample(Infer({method:'MCMC',samples:1000,burn:100,model:choicedistribution}));
+    };//end get choice
+    
+map(choicefn,datadf);

@@ -39,3 +39,19 @@ cor.plot <- (ggplot(log.df,aes(x=simBweight,y=Bweight))+geom_point()+theme_bw())
 
 
 recovery.plot+cor.plot
+
+
+logsummary.df <- log.df%>%group_by(simA1,simA2,simA3,simB1,simB2,simB3)%>%summarize(
+                                                                              meanA1=mean(myA1),
+                                                                              meanA2=mean(myA2),
+                                                                              meanA3=mean(myA3),
+                                                                              meanB1=mean(myB1),
+                                                                              meanB2=mean(myB2),
+                                                                              meanB3=mean(myB3))
+
+ggplot(logsummary.df,aes(x=simA1,y=meanA1))+geom_point()
+ggplot(logsummary.df,aes(x=simB1,y=meanB1))+geom_point()
+                                                                              
+                                                                              
+                                                                              
+                                                                                    

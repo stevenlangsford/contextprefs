@@ -1,0 +1,32 @@
+library(tidyverse)
+library(jsonlite)
+library(patchwork)
+rm(list=ls())
+
+denull <- function(x){if(is.null(x)){return("is.null");}else return(x)}
+log.df <- data.frame()
+for(afile in list.files("logs/")){
+    print(paste("getting",afile))
+    log.df <- rbind(log.df,as.data.frame(map(fromJSON(paste0("logs/",afile)),denull)))
+}
+
+log.df$ppnt <- as.factor(log.df$ppnt)
+
+simexp.df <- read.csv("simexp.csv")
+simsummary <- simexp.df%>%group_by(ppntid)%>%summarize(Bweight=max(Bweight))%>%ungroup()%>%data.frame%>%rename(ppnt=ppntid)
+
+Bsamples.plot <- ggplot(log.df,aes(x=estBweight,fill=ppnt))+geom_histogram(alpha=.5)+
+    geom_vline(data=simsummary,aes(xintercept=Bweight))+
+    facet_wrap(~ppnt)+
+    theme_bw()
+
+Aest.plot <- ggplot(log.df)+geom_point(aes(x=simA1,y=estA1,color="A1"))+
+    geom_point(aes(x=simA2,y=estA2,color="A2"))+
+    geom_point(aes(x=simA3,y=estA3,color="A3"))+theme_bw()
+
+Best.plot <- ggplot(log.df)+geom_point(aes(x=simB1,y=estB1,color="B1"))+geom_smooth(aes(x=simB1,y=estB1,color="B1"))+
+    geom_point(aes(x=simB2,y=estB2,color="B2"))+geom_smooth(aes(x=simB2,y=estB2,color="B2"))+
+    geom_point(aes(x=simB3,y=estB3,color="B3"))+geom_smooth(aes(x=simB3,y=estB3,color="B3"))+theme_bw()
+
+
+Bsamples.plot+Aest.plot
