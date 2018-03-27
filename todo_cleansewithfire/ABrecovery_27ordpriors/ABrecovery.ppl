@@ -1,0 +1,165 @@
+var tolerance = datadf[0]["toleranceA"]; //Assumes all ppnts share the same value... which is true for now...
+var orderr = datadf[0]["orderr"];
+console.log("tolerance: "+tolerance);
+console.log("orderr "+orderr);
+
+var countlist = function(n){
+    var countdown = function(n){//So ugly! But if you're gonna use this as an index, it makes more sense/keeps correct correspondances in count-up order.
+	if(n<=0) return [];
+	return [n-1].concat(countdown(n-1));
+    }
+    countdown(n).reverse()
+}
+var max = function(arr){reduce(function(a,b){if(a>b)return a; else return b;},arr[0],arr)};
+var hm_ppnts = max(map(function(arow){arow["ppntid"]},datadf))+1; //ASSUMING ids start from 0. This set of helpers is only used to construct the return values from mem-d functions by walking through a countlist of ppntids.
+
+console.log("hm_ppnts "+hm_ppnts);
+console.log(countlist(hm_ppnts)); //just checking...
+
+var writelogs = true;
+var logprob = .1;
+var logfolder = "logs/";
+
+console.log("Building ord-informed priors");
+
+var condprior = function(obs){
+    var ordrelation = function(a,b){
+	return Enumerate(function(){
+	    if(flip(orderr)) return categorical({vs:["<","=",">"],ps:[1,1,1]});
+	    if(Math.abs(a-b)<tolerance) return "=";
+	    if(a>b) return ">";
+	    if(a<b) return "<";
+	});
+    }
+    var modpriors = function(){
+	var prior = Uniform({a:0,b:10});//Gaussian({mu:0,sigma:1})//Beta({a:1,b:1});
+	var stim = repeat(3,function(){sample(prior)});
+	observe(ordrelation(stim[0],stim[1]),obs[0]);
+	observe(ordrelation(stim[0],stim[2]),obs[1]);
+	observe(ordrelation(stim[1],stim[2]),obs[2]);
+	return stim;
+    }
+
+    return Infer({method:'MCMC',samples:3500,burn:500,lag:2,model:modpriors});// boost ye samples: you can afford it
+}
+
+var ordoutcome_condpriors = {
+    "<<<":condprior(["<","<","<"]),
+    "<<=":condprior(["<","<","="]),
+    "<<>":condprior(["<","<",">"]),
+    "<=<":condprior(["<","=","<"]),
+    "<==":condprior(["<","=","="]),
+    "<=>":condprior(["<","=",">"]),
+    "<><":condprior(["<",">","<"]),
+    "<>=":condprior(["<",">","="]),
+    "<>>":condprior(["<",">",">"]),
+    "=<<":condprior(["=","<","<"]),
+    "=<=":condprior(["=","<","="]),
+    "=<>":condprior(["=","<",">"]),
+    "==<":condprior(["=","=","<"]),
+    "===":condprior(["=","=","="]),
+    "==>":condprior(["=","=",">"]),
+    "=><":condprior(["=",">","<"]),
+    "=>=":condprior(["=",">","="]),
+    "=>>":condprior(["=",">",">"]),
+    "><<":condprior([">","<","<"]),
+    "><=":condprior([">","<","="]),
+    "><>":condprior([">","<",">"]),
+    ">=<":condprior([">","=","<"]),
+    ">==":condprior([">","=","="]),
+    ">=>":condprior([">","=",">"]),
+    ">><":condprior([">",">","<"]),
+    ">>=":condprior([">",">","="]),
+    ">>>":condprior([">",">",">"])
+}
+
+console.log("Built 27 ordinformed priors");
+
+var ordstatus = function(a,b,tolerance,orderr){
+    if(flip(orderr)) return categorical({vs:["<","=",">"],ps:[1,1,1]});
+    if(Math.abs(a-b)<tolerance) return "=";
+    if(a>b) return ">";
+    if(a<b) return "<";
+}
+
+
+var recoverAgentParams = function(){
+    
+    var getBweight = mem(function(ppntid){
+	return uniform({a:0,b:5});
+    });
+
+    var getcalcsd = mem(function(ppntid){
+	return .5;//todo: recover this too (needs new sim data, this sim uses fixed calcsd).
+    });
+
+    var makechoice = function(arow){
+	var decisiondist = function(){
+	    var Aest = sample(ordoutcome_condpriors[""+
+						    ordstatus(arow.attributeA_option1,arow.attributeA_option2,arow.toleranceA,arow.orderr)+
+						    ordstatus(arow.attributeA_option1,arow.attributeA_option3,arow.toleranceA,arow.orderr)+
+						    ordstatus(arow.attributeA_option2,arow.attributeA_option3,arow.toleranceA,arow.orderr)
+						   ]);
+	    var Best = sample(ordoutcome_condpriors[""+
+						    ordstatus(arow.attributeA_option1,arow.attributeA_option2,arow.toleranceA,arow.orderr)+
+						    ordstatus(arow.attributeA_option1,arow.attributeA_option3,arow.toleranceA,arow.orderr)+
+						    ordstatus(arow.attributeA_option2,arow.attributeA_option3,arow.toleranceA,arow.orderr)
+						   ]);
+
+	    var calc1 = gaussian({mu:arow.attributeA_option1+arow.attributeB_option1*getBweight(arow.ppntid),sigma:getcalcsd(arow.ppntid)});
+	    var calc2 = gaussian({mu:arow.attributeA_option2+arow.attributeB_option2*getBweight(arow.ppntid),sigma:getcalcsd(arow.ppntid)});
+	    var calc3 = gaussian({mu:arow.attributeA_option3+arow.attributeB_option3*getBweight(arow.ppntid),sigma:getcalcsd(arow.ppntid)});
+
+	    observe(Gaussian({mu:Aest[0]+Best[0]*getBweight(arow.ppntid),sigma:getcalcsd(arow.ppntid)}),calc1);
+	    observe(Gaussian({mu:Aest[1]+Best[1]*getBweight(arow.ppntid),sigma:getcalcsd(arow.ppntid)}),calc2);
+	    observe(Gaussian({mu:Aest[2]+Best[2]*getBweight(arow.ppntid),sigma:getcalcsd(arow.ppntid)}),calc3);
+	    
+
+	    var value1 = Aest[0]+Best[0]*getBweight(arow.ppntid);
+	    var value2 = Aest[1]+Best[1]*getBweight(arow.ppntid);
+	    var value3 = Aest[2]+Best[2]*getBweight(arow.ppntid);
+
+	    //LOGS
+	if(writelogs==true&&flip(logprob)){
+	    json.write(logfolder+'test'+randomInteger(9999)+'.json', {
+		ppntid:arow.ppntid,
+		trialid:arow.trialid,
+		simBweight:arow.Bweight,
+		myBweight:getBweight(arow.ppntid),
+		myvalue1:value1,
+		myvalue2:value2,
+		myvalue3:value3,
+		simvalue1:arow.value1,
+		simvalue2:arow.value2,
+		simvalue3:arow.value3,
+		mychoice: (value1>value2&&value1>value3 ? 1 : value2>value1&&value2>value3 ? 2 : 3),
+		simchoice:arow.choice,
+		myA1:Aest[0],
+		myA2:Aest[1],
+		myA3:Aest[2],
+		myB1:Best[0],
+		myB2:Best[1],
+		myB3:Best[2],
+		simA1:arow["attributeA_option1"],
+		simA2:arow["attributeA_option2"],
+		simA3:arow["attributeA_option3"],
+		simB1:arow["attributeB_option1"],
+		simB2:arow["attributeB_option2"],
+		simB3:arow["attributeB_option3"],
+	    });}
+//END LOGS   
+	    return value1>value2&&value1>value3 ? 1 : value2>value1&&value2>value3 ? 2 : 3;
+	}
+	
+	return Infer({method:'MCMC',samples:500,burn:50,model:decisiondist}); 
+    }
+
+    map(function(arow){observe(makechoice(arow),arow.choice)},datadf);
+    console.log("retval:"+map(function(ppntid){getBweight(ppntid)},countlist(hm_ppnts)));
+    return map(function(ppntid){getBweight(ppntid)},countlist(hm_ppnts));
+}
+
+console.log("Starting inference...")
+var retval = Infer({method:'MCMC',samples:100,kernel:'HMC',model:recoverAgentParams});
+
+retval

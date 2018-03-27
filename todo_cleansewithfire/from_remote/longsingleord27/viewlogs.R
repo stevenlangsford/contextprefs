@@ -1,0 +1,100 @@
+library(tidyverse)
+library(jsonlite)
+#library(patchwork)
+rm(list=ls())
+
+## denull <- function(x){if(is.null(x)){return("is.null");}else return(x)}
+ log.df <- data.frame()
+ for(afile in list.files("logs/")){
+     print(paste("getting",afile))
+     bob <- map(fromJSON(paste0("logs/",afile)),function(x){if(is.list(x)){return(x["x"]);} else return(x)})
+     log.df <- rbind(log.df,as.data.frame(
+                                map(fromJSON(paste0("logs/",afile)),function(x){if(is.list(x)){return(x["x"]);} else return(x)})
+                            ))
+ }
+names(log.df) <- names(bob)#OMG the ugliness why.
+log.df$ppntid <- as.factor(log.df$ppntid)
+
+
+optionsummary.df <- log.df%>%group_by(simA1,simA2,simA3,simB1,simB2,simB3)%>%summarize(
+                                                   myA1=mean(myA1),
+                                                   myA2=mean(myA2),
+                                                   myA3=mean(myA3),
+                                                   myB1=mean(myB1),
+                                                   myB2=mean(myB2),
+                                                   myB3=mean(myB3),
+                                                   myvalue1=mean(myvalue1),
+                                                   simvalue1=mean(simvalue1)
+                                                   )%>%ungroup()
+checkoptionests.df <- bind_cols(optionsummary.df%>%select(contains("sim"))%>%gather(whichoption,value,1:6),optionsummary.df%>%select(contains("my"))%>%gather(whichoption,value,1:6))
+
+
+checkoptionests.plot <- ggplot(checkoptionests.df,aes(x=value,y=value1))+geom_point()+theme_bw()+xlab("simulation attribute value")+ylab("value estimated during recovery")
+
+
+                                                         
+## optionests.plot <- ggplot(log.df)+
+##     geom_point(aes(x=simA1,y=myA1))+
+##     geom_point(aes(x=simA2,y=myA2))+
+##     geom_point(aes(x=simA3,y=myA3))+theme_bw()
+
+## optionestsB.plot <- ggplot(log.df)+
+##     geom_point(aes(x=simB1,y=myB1))+
+##     geom_point(aes(x=simB2,y=myB2))+
+##     geom_point(aes(x=simB3,y=myB3))+theme_bw()
+
+#optionsummary.df <- log.df%>%group_by(rowname)%>%summarize(estA1=mean(myA1),simA1=mean(simA1))%>%ungroup()
+
+## simexp.df <- read.csv("simexp.csv")
+## getppntstats <- function(ppntid, targstat){#should've just saved these at the time in the logs, oh well.
+##     return(simexp.df[simexp.df$ppntid==ppntid,targstat][1]) #any one will do
+## }
+## log.df$simBweight <- sapply(log.df$ppntid,function(x){getppntstats(x,"Bweight")})
+
+## log.df <- log.df%>%rename(myBweight=Bweight)
+
+Bsummary.df <- log.df%>%group_by(ppntid)%>%summarize(myBweight=mean(myBweight),simBweight=mean(simBweight))%>%ungroup()
+#Brecovery.plot <- ggplot(Bsummary.df,aes(x=simBweight,y=myBweight))+geom_point()+theme_bw()
+
+Bsummary.df <- log.df%>%group_by(ppntid)%>%summarize(Best=mean(myBweight),Bsim=mean(simBweight))%>%ungroup()
+
+Brecovery.plot <-
+    ggplot(log.df,aes(x=simBweight,y=myBweight,group=ppntid))+
+    geom_boxplot()+
+    geom_point(data=Bsummary.df,aes(x=Bsim,y=Best),color="red")+
+    theme_bw()+ylab("est B weight")
+ggsave(Brecovery.plot,file="brecovery.png")
+
+#ggsave(
+#Brecovery.boxplot+checkoptionests.plot
+#,file="midrun.png",width=15)
+
+#print(with(log.df,sum(mychoice==simchoice)/nrow(log.df)))
+#print(with(log.df,sum(simchoice==oraclechoice)/nrow(log.df))) #calcsd is pretty low for now to give recovery the best possible chance.
+#print(with(log.df,sum(mychoice==oraclechoice)/nrow(log.df)))
+
+Bposteriors.plot <- ggplot(log.df,aes(x=myBweight))+facet_wrap(~ppntid)+geom_histogram()+
+    geom_vline(data=log.df%>%group_by(ppntid)%>%summarize(simtruth=mean(simBweight)),aes(xintercept=simtruth,color="sim"))+
+    geom_vline(data=log.df%>%group_by(ppntid)%>%summarize(recoverymean=mean(myBweight)),aes(xintercept=recoverymean,color="recovered"))+
+    theme_bw()
+
+ggsave(Bposteriors.plot,file="Bposteriors.png")
+ggsave(checkoptionests.plot,file="checkoptionests.png")
+
+
+valsummary.df <- log.df%>%group_by(ppntid,simA1)%>%summarize(estval1=mean(myvalue1),simvalue1=mean(simvalue1))%>%ungroup()
+
+valueest.plot <- ggplot(log.df,aes(x=simvalue1,y=myvalue1,group=simvalue1))+
+    geom_boxplot()+
+    geom_point(data=valsummary.df,aes(x=simvalue1,y=estval1),color="red")+
+    facet_wrap(~ppntid,scales="free")+
+    theme_bw()
+
+ggsave(valueest.plot,file="checkvalueest.png",width=15)
+
+
+print(paste(length(unique(log.df$simA1)),"trials considered"));
+
+##(non) relation between b estimates and b-weight?
+#ggplot(log.df%>%group_by(trialid)%>%summarize(myBweight=mean(myBweight),myB1=mean(myB1)),aes(x=myBweight,y=myB1))+geom_point()+theme_bw()#+geom_smooth(method="lm")
+with(log.df,sum(mychoice==simchoice)/nrow(log.df))
