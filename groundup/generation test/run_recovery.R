@@ -1,0 +1,38 @@
+library(tidyverse)
+library(rwebppl)
+library(patchwork)
+rm(list=ls())
+
+exp.df <- read.csv("simexp_sanschoices.csv")
+
+
+fit <- webppl(program_file="recoverAgent.ppl",data=exp.df,data_var="datadf",packages=c("webppl-json"));
+save.image("recoveryran_optimize.RData")
+
+est.df <-  data.frame(ppntid=1:length(fit)-1,est=fit)
+
+mysummary.df <- exp.df%>%group_by(ppntid)%>%summarize(Bweight=mean(Bweight))%>%ungroup()%>%plyr::join(est.df,by="ppntid")
+
+##print(est.df)
+print(paste("r=",with(mysummary.df,cor(Bweight,est))))
+
+saveplots <- FALSE;
+
+recovery.plot <- ggplot(mysummary.df)+
+    geom_point(aes(x=Bweight,y=est,color="recovered"))+
+    geom_smooth(aes(x=Bweight,y=est,color="recovered"),method='lm')+
+    ggtitle(paste("r=",with(mysummary.df,signif(cor(Bweight,est),3))))+
+    theme_bw()+guides(color=FALSE)
+
+vstruth.plot <- ggplot(mysummary.df)+
+    geom_line(aes(x=Bweight,y=Bweight,color="sim"),alpha=.5)+geom_point(aes(x=Bweight,y=Bweight,color="sim"),alpha=.5,size=2)+
+    geom_point(aes(x=Bweight,y=est,color="recovered"))+ggtitle(paste("r=",with(mysummary.df,signif(cor(Bweight,est),3))))+
+   ylim(c(0,1))+
+    theme_bw()
+
+
+if(saveplots){
+    ggsave(recovery.plot,file="recoveredonly_withfactor.png")
+}else{
+    print(vstruth.plot+recovery.plot);
+}

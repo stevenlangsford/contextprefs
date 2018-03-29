@@ -1,0 +1,41 @@
+var countlist = function(n){
+    var countdown = function(n){//So ugly! But if you're gonna use this as an index, it makes more sense/keeps correct correspondances in count-up order.
+	if(n<=0) return [];
+	return [n-1].concat(countdown(n-1));
+    }
+    countdown(n).reverse()
+}
+var max = function(arr){reduce(function(a,b){if(a>b)return a; else return b;},arr[0],arr)};
+var hm_ppnts = max(map(function(arow){arow["ppntid"]},datadf))+1; //ASSUMING ids start from 0. This set of helpers is only used to construct the return values from mem-d functions by walking through a countlist of ppntids.
+
+var recoverK = function(){
+    // var get_k = mem(function(ppntid){
+    // 	return beta({a:2,b:2})
+    // })
+
+    var get_k = function(ppntid){
+	return Math.sigmoid(modelParam({name:'k'+ppntid}));
+    }
+    
+    var appraise = function(a,b,ppntid){
+	var k = get_k(ppntid);
+	return (1-k)*a+k*b;
+    }
+    
+    var observefn = function(arow){
+//	console.log(arow.value1+":"+appraise(arow.attributeA_option1,arow.attributeB_option1,arow.ppntid).x);
+	observe(Gaussian({mu:appraise(arow.attributeA_option1,arow.attributeB_option1,arow.ppntid),sigma:.5}),arow.value1);
+    }
+    
+    map(observefn,datadf)
+//    console.log(map(function(x){x.x},map(get_k,countlist(hm_ppnts))));
+    
+    //    return map(get_k,countlist(hm_ppnts));
+    //no return if optimizing.
+}
+
+//Infer({method:'MCMC',kernel:'HMC',samples:1000,burn:100,lag:2,model:recoverK})
+//Infer({method: 'optimize', samples: 100, steps: 2, onlyMAP:true,model: recoverK});
+Optimize({model:recoverK,steps:4000,optMethod:'adam'})
+
+map(function(id){Math.sigmoid(getParams()['k'+id])},countlist(hm_ppnts));

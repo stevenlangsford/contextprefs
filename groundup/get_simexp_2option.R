@@ -4,23 +4,24 @@ rm(list=ls())
 
 ##world setup
 hm_ppnts <- 10;
-hm_trials <- 10; #low because repeated
-trialreps <- 10;
-stimrange <- 10;
+hm_trials <- 150;
+trialreps <- 1;
+stimrange <- 1;
 
 ##ppnt setup
 ppnt_calcsd <- rep(.5,hm_ppnts)
 ppnt_Bweight <- seq(from=0,to=1,length=hm_ppnts)#rbeta(hm_ppnts,shape1=2,shape2=2)
-ppnt_toleranceA <- rep(1,hm_ppnts)
-ppnt_toleranceB <- rep(1,hm_ppnts)
+ppnt_toleranceA <- rep(.01,hm_ppnts)
+ppnt_toleranceB <- rep(.01,hm_ppnts)
 ppnt_orderr <- rep(.1,hm_ppnts)
 
 ##stim setup
 stim.df <- data.frame(
-    attributeA_option1=stimrange/2,
-    attributeA_option2=stimrange/2,
-    attributeB_option1=seq(from=0,to=stimrange,length=hm_trials),
-    attributeB_option2=stimrange/2,
+    attributeA_option1=runif(hm_trials,0,stimrange),
+    attributeA_option2=runif(hm_trials,0,stimrange),
+    attributeB_option1=runif(hm_trials,0,stimrange),
+    attributeB_option2=runif(hm_trials,0,stimrange),
+
     trialid=1:hm_trials
 )
 

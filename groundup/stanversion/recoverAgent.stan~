@@ -1,0 +1,11 @@
+data{
+  int hm_trials;
+  int hm_ppnts;
+  
+  real A1[hm_trials];
+  real B1[hm_trials];
+  real A2[hm_trials];
+  real B2[hm_trials];
+  int ppntid[hm_trials];
+    
+}

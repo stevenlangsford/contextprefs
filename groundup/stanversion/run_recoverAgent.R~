@@ -1,0 +1,18 @@
+library('rstan')
+library('shinystan')
+rm(list=ls())
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+
+
+##get data
+
+fit <- stan(file="regression1.stan",
+            data=hw_datalist,
+            iter=1000,
+            chains=4
+            )
+
+#stan_trace(fit) #obligatory mixing check.
+
+#mysamples <- as.data.frame(extract(fit, permuted = TRUE)) # extract returns a list of arrays

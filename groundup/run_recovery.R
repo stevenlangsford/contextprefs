@@ -4,33 +4,35 @@ library(patchwork)
 rm(list=ls())
 
 exp.df <- read.csv("simexp_sanschoices.csv")
-#exp.df$rowname <- 1:nrow(exp.df);
 
-fit <- webppl(program_file="nonoise_reportvalue.ppl",data=exp.df,data_var="datadf",packages=c("webppl-json"));
 
-##if using Optimize:
+fit <- webppl(program_file="recoverAgent.ppl",data=exp.df,data_var="datadf",packages=c("webppl-json"));
+save.image("recoveryran_optimize.RData")
+
 est.df <-  data.frame(ppntid=1:length(fit)-1,est=fit)
 
-print(est.df)
+mysummary.df <- exp.df%>%group_by(ppntid)%>%summarize(Bweight=mean(Bweight))%>%ungroup()%>%plyr::join(est.df,by="ppntid")
 
-##if using Infer:
-## est.df = map(fit$value, function(x){data.frame(ppntid=0:(length(x)-1),est=x)})%>%bind_rows
+##print(est.df)
+print(paste("r=",with(mysummary.df,cor(Bweight,est))))
 
-## simsummary.df <- exp.df%>%group_by(ppntid)%>%summarize(Bweight=mean(Bweight))%>%ungroup()
-## estsummary.df <- est.df%>%group_by(ppntid)%>%summarize(est=mean(est))%>%ungroup()
-## jointsummary.df <- plyr::join(simsummary.df,estsummary.df,by="ppntid")
+saveplots <- FALSE;
 
-## (ggplot(est.df,aes(x=est))+geom_histogram()+facet_wrap(~ppntid)+
-##     geom_vline(data=simsummary.df,aes(xintercept=Bweight,color="simtruth"))+
-##     geom_vline(data=estsummary.df,aes(xintercept=est,color="recovered"))+
-##     theme_bw())/
-## (ggplot(jointsummary.df,aes(x=Bweight,y=est))+ylim(c(0,1))+geom_point()+theme_bw())
+recovery.plot <- ggplot(mysummary.df)+
+    geom_point(aes(x=Bweight,y=est,color="recovered"))+
+    geom_smooth(aes(x=Bweight,y=est,color="recovered"),method='lm')+
+    ggtitle(paste("r=",with(mysummary.df,signif(cor(Bweight,est),3))))+
+    theme_bw()+guides(color=FALSE)
+
+vstruth.plot <- ggplot(mysummary.df)+
+    geom_line(aes(x=Bweight,y=Bweight,color="sim"),alpha=.5)+geom_point(aes(x=Bweight,y=Bweight,color="sim"),alpha=.5,size=2)+
+    geom_point(aes(x=Bweight,y=est,color="recovered"))+ggtitle(paste("r=",with(mysummary.df,signif(cor(Bweight,est),3))))+
+   ylim(c(0,1))+
+    theme_bw()
 
 
-
-
-
-#save.image("recoveryran_optimize.RData")
-
-#View("done inferagent")
-
+if(saveplots){
+    ggsave(recovery.plot,file="recoveredonly.png")
+}else{
+    print(vstruth.plot);
+}

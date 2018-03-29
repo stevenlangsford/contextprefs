@@ -1,0 +1,49 @@
+var countlist = function(n){
+    var countdown = function(n){//So ugly! But if you're gonna use this as an index, it makes more sense/keeps correct correspondances in count-up order.
+	if(n<=0) return [];
+	return [n-1].concat(countdown(n-1));
+    }
+    countdown(n).reverse()
+}
+var max = function(arr){reduce(function(a,b){if(a>b)return a; else return b;},arr[0],arr)};
+var hm_ppnts = max(map(function(arow){arow["ppntid"]},datadf))+1; //ASSUMING ids start from 0. This set of helpers is only used to construct the return values from mem-d functions by walking through a countlist of ppntids.
+
+var recoverK = function(){
+
+    var get_k = function(ppntid){
+	return Math.sigmoid(modelParam({name:'k'+ppntid}));
+    }
+    
+    var appraise = function(a,b,ppntid){
+	var k = get_k(ppntid);
+	return (1-k)*a+k*b;
+    }
+
+    var observefn = function(arow){
+
+	//this also works, est~sim correlation =.98, but values strikingly flattened in the rest run.
+	// var value1 = gaussian({mu:appraise(arow.attributeA_option1,arow.attributeB_option1,arow.ppntid),sigma:.5});
+	// var value2 = gaussian({mu:appraise(arow.attributeA_option2,arow.attributeB_option2,arow.ppntid),sigma:.5});
+	// var tolerance = .5;
+	// observe(Gaussian({mu:(value1-value2),sigma:tolerance}), (arow.value1-arow.value2) );
+
+	var value1 = appraise(arow.attributeA_option1,arow.attributeB_option1,arow.ppntid);
+	var value2 = appraise(arow.attributeA_option2,arow.attributeB_option2,arow.ppntid);
+	var choice = value1==value2 ? (flip() ? 1 : 2) : value1 > value2 ? 1 : 2;
+	
+	var p1 = Math.exp(value1)/(Math.exp(value1)+Math.exp(value2));
+	var p2 = Math.exp(value2)/(Math.exp(value1)+Math.exp(value2));
+	
+	observe(Categorical({vs:[1,2],ps:[p1,p2]}),choice); //creates a (non-stupid?) gradient? With factor only adam hits zero gradients and complains.
+	
+//	factor((value1<value2) == (arow.value1<arow.value2)) //extra encourangement? now you're just flailing. //doesn't seem effective.
+	
+    }
+    
+    map(observefn,datadf)
+    //no return if optimizing.
+}
+
+Optimize({model:recoverK,steps:4000,optMethod:'adam'})
+
+map(function(id){Math.sigmoid(getParams()['k'+id])},countlist(hm_ppnts));
