@@ -1,0 +1,13 @@
+data{
+  int hm_trials; //hm_trials
+  int hm_ppnts;
+  real impression;
+}
+
+parameters{
+  real calcsd;
+}
+
+model{
+  
+}

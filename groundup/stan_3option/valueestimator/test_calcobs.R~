@@ -1,0 +1,67 @@
+library('tidyverse')
+library('rstan')
+library('shinystan')
+library('patchwork')
+rm(list=ls())
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+
+
+hm_ppnts = 10;
+k = seq(from=0,to=1,length=hm_ppnts)
+calcsd = abs(rcauchy(hm_ppnts,0,0.1))
+
+hm_stim = 10
+A1 = runif(hm_stim,0,1)
+B1 = runif(hm_stim,0,1)
+
+##assign stim to ppnts
+stim.df <- data.frame()
+for(i in 1:hm_ppnts){
+    stim.df <- rbind(
+        stim.df,
+        data.frame(
+            ppntid=i,
+            k=k[i],
+            calcsd=calcsd[i],
+            A1=A1,
+            B1=B1,
+            value=(1-k[i])*A1+k[i]*B1
+        )
+    )
+}
+
+for(i in 1:nrow(stim.df)){
+    myk <- stim.df[i,"k"]
+    myA <- stim.df[i,"A1"]
+    myB <- stim.df[i,"B1"]
+    mycalcsd <- stim.df[i,"calcsd"]
+    myvalue = (1-myk)*myA+myk*myB
+    stim.df[i,"impression"] <- rnorm(1,myvalue,mycalcsd)
+}
+
+datalist = list(hm_trials=nrow(stim.df),
+                hm_ppnts=hm_ppnts,
+                ppntid=stim.df$ppntid,
+                impression=stim.df$impression,
+                k=k,
+                calcsd=calcsd)
+
+
+fit <- stan(file="valuestimator.stan",
+           data=datalist,
+           iter=1000,
+           chains=4);
+
+#launch_shinystan(fit);
+
+mysamples <- as.data.frame(extract(fit, permuted = TRUE)) # extract returns a list of arrays
+
+estvals <- mysamples%>%select(contains("estval"))
+
+see <- function(i){
+    ggplot(estvals[i],aes_string(x=paste0("estval.",i)))+geom_histogram()+theme_bw()+
+        geom_vline(data=stim.df%>%filter(row_number()==i),aes(xintercept=value,color="truevalue"))+
+        geom_vline(data=stim.df%>%filter(row_number()==i),aes(xintercept=impression,color="impression"))+
+        geom_vline(data=data.frame(x=.5),aes(xintercept=x,color="prior"))    
+}

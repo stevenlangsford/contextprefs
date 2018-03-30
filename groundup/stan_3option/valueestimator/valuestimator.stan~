@@ -1,0 +1,33 @@
+data{
+  int hm_trials; //hm_trials
+  int hm_ppnts;
+  int ppntid[hm_trials];
+  real impression[hm_trials]; //single option considered
+  real<lower=0,upper=1> k[hm_ppnts]; //k is known to agent
+  real<lower=0> calcsd[hm_ppnts]; //calcsd is known to agent.
+}
+
+parameters{
+  real A[hm_trials];
+  real B[hm_trials];
+  real estval[hm_trials];
+}
+
+model{
+  
+  for(i in 1:hm_trials){
+    A[i]~normal(0,1);
+    B[i]~normal(0,1);
+    impression[i]~normal(
+			 (1-k[ppntid[i]])*A[i]+k[ppntid[i]]*B[i],
+			 calcsd[ppntid[i]]
+			 );
+    estval[i]~normal(impression/2,calcsd/2); //double check this. calcsd/2 seems a bit extreme!
+  }
+}
+generated quantities{
+  real estval[hm_trials];
+  for(i in 1:hm_trials){
+    estval[i]=(1-k[ppntid[i]])*A[i]+k[ppntid[i]]*B[i];
+  }
+}
